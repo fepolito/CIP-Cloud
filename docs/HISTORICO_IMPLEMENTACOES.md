@@ -1416,3 +1416,12 @@ Indicador	Valor
 🍻 Sessão fechada com sucesso, Fernando. O projeto ficou um passo mais limpo, a arquitetura de tema está formalmente documentada, e ainda colhemos uma boa lição sobre não confundir CSRF antigo com bug novo.
 
 Quando voltar, é só me apontar o próximo módulo (aposto que é api/limites/* 🎯) ou colar este status para retomarmos com contexto completo. Até a próxima! 🚀
+
+
+Write-Host "`n=== Verificacao final ===" -ForegroundColor Cyan
+git remote -v
+git log --oneline -1
+git status
+
+Write-Host "`n=== Abrir o repo no navegador ===" -ForegroundColor Cyan
+Start-Process "https://github.com/fepolito/CIP-Cloud"
