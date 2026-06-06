@@ -1,0 +1,293 @@
+/* ============================================================
+ * Arquivo   : assets/css/header.css
+ * Projeto   : CIP — Controlador de Injeção de Potência Elétrica
+ * Objetivo  : Estilos exclusivos do header fixo e drawers.
+ *             NÃO define cores globais — respeita o app.css.
+ *
+ * Dependências de software:
+ *   - includes/app_header.php
+ *   - assets/js/app-shell.js
+ *   - assets/css/app.css (base global — carregado antes)
+ *
+ * Histórico:
+ *   2026-03-27  v1.0.0  Criação inicial
+ *   2026-04-15  v2.0.0  Drawer left/right com overlay e animação
+ *   2026-04-15  v2.1.0  [FIX] Removidas definições globais que
+ *                        sobrescreviam app.css (body bg, font, etc.)
+ *                        Drawer bg usa var(--color-surface, #ffffff)
+ *                        para respeitar tema do projeto.
+ * ============================================================ */
+
+/* ── Header fixo ─────────────────────────────────────────── */
+.app-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    background: var(--color-surface, #ffffff);
+    border-bottom: 1px solid var(--color-border, #e2e8f0);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    z-index: 1000;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+}
+
+.header-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text, #0f172a);
+    flex: 1;
+    text-align: center;
+    padding: 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Botões do header ────────────────────────────────────── */
+.header-btn {
+    width: 42px;
+    height: 42px;
+    border: none;
+    background: transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted, #374151);
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.header-btn:hover  { background: var(--color-hover, #f1f5f9); }
+.header-btn:active { background: var(--color-border, #e2e8f0); }
+
+/* ── Ícone hambúrguer ────────────────────────────────────── */
+.hamburger-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 20px;
+}
+
+.hamburger-icon span {
+    display: block;
+    height: 2px;
+    background: var(--color-text-muted, #374151);
+    border-radius: 2px;
+    transition: all 0.2s;
+}
+
+/* ── Avatar da empresa ───────────────────────────────────── */
+.brand-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--color-primary-light, #dbeafe);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.brand-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.brand-initials {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-primary, #1d4ed8);
+    letter-spacing: 0.5px;
+}
+
+/* ── Overlay ─────────────────────────────────────────────── */
+.drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .40);
+    z-index: 1100;
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+}
+
+.drawer-overlay.active {
+    display: block;
+}
+
+/* ── Drawer base ─────────────────────────────────────────── */
+.drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+
+    /* Usa a variável de cor de superfície do app.css ou fallback branco */
+    background: var(--color-surface, #ffffff);
+    color: var(--color-text, #0f172a);
+
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, .18);
+    transition: transform 0.28s cubic-bezier(.4, 0, .2, 1);
+    will-change: transform;
+}
+
+/* ── Drawer esquerdo ─────────────────────────────────────── */
+.drawer-left {
+    left: 0;
+    transform: translateX(-100%);
+}
+
+.drawer-left.open {
+    transform: translateX(0);
+}
+
+/* ── Drawer direito ──────────────────────────────────────── */
+.drawer-right {
+    right: 0;
+    transform: translateX(100%);
+}
+
+.drawer-right.open {
+    transform: translateX(0);
+}
+
+/* ── Cabeçalho do drawer ─────────────────────────────────── */
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--color-border, #f1f5f9);
+    min-height: 60px;
+    flex-shrink: 0;
+}
+
+.drawer-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text, #0f172a);
+}
+
+.drawer-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--color-hover, #f8fafc);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted, #64748b);
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.drawer-close:hover {
+    background: var(--color-border, #e2e8f0);
+    color: var(--color-text, #0f172a);
+}
+
+/* ── Navegação do drawer ─────────────────────────────────── */
+.drawer-nav {
+    list-style: none;
+    margin: 0;
+    padding: 8px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.drawer-nav li {
+    margin: 0;
+    padding: 0;
+}
+
+.drawer-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--color-text, #374151);
+    font-size: 15px;
+    font-weight: 500;
+    transition: background 0.15s, color 0.15s;
+}
+
+.drawer-link:hover {
+    background: var(--color-hover, #f1f5f9);
+    color: var(--color-text, #0f172a);
+}
+
+.drawer-link.active {
+    background: var(--color-primary-light, #eff6ff);
+    color: var(--color-primary, #1d4ed8);
+    font-weight: 600;
+}
+
+.drawer-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* ── Body com drawer aberto ──────────────────────────────── */
+body.drawer-open {
+    overflow: hidden;
+}
+
+/* ── Padding do conteúdo (compensa header fixo 60px) ─────── */
+.app-content {
+    padding-top: 72px;
+}
+
+/* ── Responsivo ──────────────────────────────────────────── */
+@media (min-width: 768px) {
+    .drawer        { width: 300px; }
+    .app-content   { padding-top: 80px; }
+}
+
+/* =============================================================================
+ * Adicao em 2026-05-18 - Estilo do botao de tema global (#btn-tema)
+ * Motivo: novo botao no header para alternar tema claro/escuro globalmente
+ * ============================================================================= */
+
+/* Botao de tema - herda visual de .header-btn mas com tamanho de emoji */
+.header-btn.btn-tema {
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.header-btn.btn-tema:hover {
+  transform: scale(1.1);
+}
+
+.header-btn.btn-tema:active {
+  transform: scale(0.95);
+}
+

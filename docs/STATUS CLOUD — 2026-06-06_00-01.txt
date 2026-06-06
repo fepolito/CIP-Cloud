@@ -1,0 +1,223 @@
+📋 STATUS COMPLETO — Sessão de 2026-06-05
+Projeto: CIP Cloud (monitor.aeonium.com.br) — Camada web/dashboard do Controlador de Injeção de Potência (AER) Engenheiro: Fernando Copiloto: CIP Cloud Copilot Duração da sessão: ~1 dia útil Tema central: Investigação forense e eliminação de duplicata de tema.js
+
+🎯 1. CONTEXTO INICIAL
+1.1 Ponto de partida
+Fernando identificou, durante manutenção do projeto, a presença de dois arquivos tema.js em locais diferentes da árvore do projeto:
+
+
+
+monitor.aeonium.com.br/
+├── assets/
+│   ├── js/
+│   │   └── tema.js         ← Referenciado em includes/app_head.php
+│   └── tema/
+│       └── tema.js         ← Origem desconhecida (suspeito de fóssil)
+1.2 Risco percebido
+A presença de duplicatas em projetos multi-tenant é anti-padrão crítico:
+
+🐛 Risco de divergência silenciosa (alterar um e esquecer o outro)
+🤯 Confusão de manutenção (qual é o "verdadeiro"?)
+📦 Bloat desnecessário do projeto
+🧟 Comportamento imprevisível se algum script carregar o errado
+1.3 Objetivo declarado
+Identificar a fonte da verdade, eliminar o fóssil com segurança e documentar a arquitetura final do sistema de tema.
+
+🔬 2. INVESTIGAÇÃO FORENSE
+2.1 Comparação dos arquivos
+Primeira hipótese: os arquivos podem ser diferentes (versão antiga vs. nova).
+
+Resultado da comparação:
+
+
+
+
+Atributo	assets/js/tema.js	assets/tema/tema.js
+Tamanho	4073 bytes	4073 bytes
+Hash MD5	(idêntico)	(idêntico)
+Última modificação	18/05/2026 23:51:22	(idêntica)
+✅ Conclusão: arquivos idênticos byte-a-byte. Não havia risco de perda de funcionalidade ao deletar um deles — só era preciso identificar qual era o referenciado.
+
+2.2 Busca por referências no projeto
+Executadas múltiplas varreduras com Select-String em todo o projeto (.php, .js, .html) buscando referências aos dois paths:
+
+Referências a assets/js/tema.js:
+
+✅ includes/app_head.php (linha 127) — <script src="/assets/js/tema.js"></script>
+Referências a assets/tema/tema.js:
+
+❌ Zero ocorrências em qualquer arquivo ativo do projeto
+2.3 Verificação cruzada por identificadores da API
+Para descartar carregamento dinâmico ou via path alternativo, complementou-se a busca pelos identificadores únicos exportados pelo script:
+
+powershell
+
+
+Select-String -Pattern "CipTema|cip-tema|window.CipTema" -SimpleMatch -Recurse
+Resultado: todos os consumers (energia.php e correlatos) carregam o tema exclusivamente via includes/app_head.php, que aponta para assets/js/tema.js.
+
+2.4 Veredito da investigação
+🏛️ Fonte da verdade confirmada: assets/js/tema.js 🦴 Fóssil identificado: assets/tema/tema.js 📅 Origem provável: resíduo do refactor de 18/05/2026, quando a lógica de tema foi extraída das páginas individuais e centralizada no app_head.php global. O arquivo antigo deveria ter sido deletado na ocasião, mas ficou órfão.
+
+🏗️ 3. ARQUITETURA DO SISTEMA DE TEMA (documentada)
+Durante a investigação, mapeou-se a arquitetura completa do sistema de tema claro/escuro, considerada fonte única de verdade dali em diante:
+
+3.1 Camadas do sistema
+
+
+┌─────────────────────────────────────────────────────┐
+│  CAMADA 1: Anti-FOUC inline (no <head>)            │
+│  Local: includes/app_head.php (script inline)      │
+│  Função: aplica data-tema ANTES do CSS pintar      │
+│  → evita "flash" de tema errado ao carregar        │
+└─────────────────────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  CAMADA 2: Módulo global window.CipTema            │
+│  Local: assets/js/tema.js                          │
+│  Carregamento: <script src=...> SEM defer          │
+│  API publica:                                       │
+│    - CipTema.atual()  → 'claro' | 'escuro'          │
+│    - CipTema.alterar(modo)                          │
+│    - CipTema.alternar()                             │
+│    - CipTema.aoMudar(callback) → event listener     │
+└─────────────────────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  CAMADA 3: Consumers (paginas)                      │
+│  Ex: energia.php → ApexCharts reconfigura cores     │
+│  ao receber evento de mudança via CipTema.aoMudar() │
+└─────────────────────────────────────────────────────┘
+3.2 Decisão arquitetural reforçada
+⚙️ tema.js NÃO usa defer intencionalmente — energia.php chama CipTema.atual() durante o init dos ApexCharts e precisa que a API esteja disponível imediatamente
+🎨 Tema persiste em localStorage (chave gerenciada internamente pelo módulo)
+🌐 Funciona globalmente porque includes/app_head.php é incluído em todas as páginas autenticadas
+⚔️ 4. EXECUÇÃO DA CIRURGIA
+4.1 Plano de execução aprovado
+✅ Deletar assets/tema/tema.js
+✅ Remover pasta assets/tema/ se ficar vazia
+✅ Confirmar que assets/js/tema.js permanece intacto
+✅ Validar funcionamento da alternância de tema em energia.php
+4.2 Incidente operacional — script incompleto
+Na primeira tentativa, o script de delete foi executado sem o comando central Remove-Item assets\tema\tema.js -Force (linha pulada no copy-paste).
+
+Resultado parcial:
+
+✅ Listou estado inicial
+❌ Pulou o delete do arquivo
+✅ Verificou (corretamente) que a pasta ainda tinha conteúdo
+✅ Avisou: "pasta assets/tema/ ainda tem arquivos"
+🎯 O script comportou-se como esperado — o problema foi execução incompleta do plano, não bug.
+
+4.3 Execução final correta
+Script completo executado em sequência:
+
+Remove-Item assets\tema\tema.js -Force → arquivo deletado
+Verificação Get-ChildItem → pasta vazia confirmada
+Remove-Item assets\tema -Force → pasta removida
+Test-Path assets\tema → confirmou inexistência
+Get-ChildItem assets\js\tema.js → oficial intacto (4073 bytes, mtime 18/05/2026)
+✅ Estado final da árvore:
+
+
+
+assets/
+├── js/
+│   └── tema.js   ← ÚNICA fonte da verdade (4073 bytes)
+└── (assets/tema/ REMOVIDA)
+🚨 5. INCIDENTE DE FALSO POSITIVO — "Não consigo logar"
+5.1 Sintoma reportado
+Logo após a cirurgia, Fernando reportou impossibilidade de fazer login, com a mensagem:
+
+"Sessão de segurança inválida. Atualize a página e tente novamente."
+
+5.2 Diagnóstico
+Investigação rápida classificou o erro como CSRF/sessão, não como falha do delete:
+
+
+
+
+Critério	Análise
+Mensagem é de tema/CSS?	❌ Não — é validação backend de token CSRF
+assets/tema/tema.js era referenciado?	❌ Não — 3 buscas confirmaram
+Login depende de window.CipTema?	❌ Não — login é form PHP puro
+Tela de login carrega CSS de tema?	❌ Não tem relação com o módulo deletado
+Hipótese principal: sessão PHP/cookie velho do navegador após período de inatividade. Token CSRF do <form> não bateu com o token na $_SESSION (expirado ou regenerado).
+
+5.3 Resolução
+Procedimento recomendado:
+
+Fechar todas as abas do projeto
+Limpar cookies do domínio (F12 → Application → Cookies → Clear)
+Abrir nova aba e fazer login imediato
+✅ Resolveu em primeira tentativa. Confirmou-se a hipótese de cookie/sessão velha — zero relação com a cirurgia anterior.
+
+5.4 Lição aprendida
+Em ambiente de desenvolvimento local, ao ver erro de sessão/CSRF logo após qualquer mudança no código, o primeiro suspeito deve ser o estado do navegador, não o código recém-alterado. Limpar cookies antes de cogitar rollback economiza tempo e evita mascarar problemas reais.
+
+✅ 6. VALIDAÇÃO FUNCIONAL FINAL
+Fernando confirmou após login bem-sucedido:
+
+
+
+
+Validação	Resultado
+Acesso ao sistema (login)	✅ OK
+Carregamento de energia.php	✅ OK
+Alternância claro ↔ escuro via botão de tema	✅ OK
+Sem erros no console do navegador	✅ Implícito (não reportado)
+ApexCharts respondendo à mudança de tema	✅ OK (parte do "tema ok")
+🎯 Sistema 100% operacional com a duplicata removida.
+
+📊 7. RESUMO EXECUTIVO
+7.1 Arquivos tocados
+
+
+
+Arquivo / Pasta	Ação	Justificativa
+assets/tema/tema.js	🗑️ Deletado	Fóssil duplicado, sem referências
+assets/tema/	🗑️ Pasta removida	Vazia após delete do arquivo
+assets/js/tema.js	✅ Preservado	Fonte única da verdade
+includes/app_head.php	✅ Inalterado	Continua referenciando o caminho correto
+7.2 Impactos arquiteturais
+Frontend: zero impacto funcional, apenas higienização
+Backend: zero impacto (não tocou em PHP)
+Banco de dados: zero impacto
+Multi-tenant: zero impacto (tema é global, não tenant-scoped)
+Firmware (CIP): zero impacto (escopo 100% web)
+API SolisCloud: zero impacto
+Tabela de limites: zero impacto
+7.3 Riscos residuais
+⚠️ Nenhum identificado. Cirurgia limpa, validada e reversível trivialmente (arquivo recuperável de qualquer backup do projeto pré-sessão se necessário no futuro — o que é improvável).
+🧠 8. DECISÕES TÉCNICAS CONSOLIDADAS
+Fonte única da verdade para tema: assets/js/tema.js
+Anti-FOUC obrigatório: script inline no <head> antes do CSS (em includes/app_head.php)
+API global window.CipTema: carregada sem defer intencionalmente, para disponibilidade síncrona no init dos consumers
+Persistência: localStorage (gerenciada internamente pelo módulo)
+Política de duplicatas: proibidas. Refactors que movem arquivos devem deletar o original na mesma operação. Em caso de dúvida, renomear com sufixo .bak.YYYY-MM-DD em vez de manter duplicata silenciosa
+Diagnóstico de erros pós-deploy local: sempre verificar estado do navegador (cookies/cache) antes de considerar rollback de código
+📝 9. PENDÊNCIAS / PRÓXIMOS PASSOS SUGERIDOS
+9.1 Curto prazo (oportunístico)
+📄 Criar docs/ARQUITETURA_TEMA.md documentando o fluxo de 3 camadas (anti-FOUC inline + módulo CipTema + consumers)
+🧹 Rodar auditoria preventiva de outros possíveis órfãos em assets/ — buscar arquivos sem referência em nenhum .php/.js ativo. Script de varredura simples pode automatizar
+9.2 Médio prazo (agenda principal do projeto)
+Retomar trabalho nos módulos centrais do CIP Cloud:
+
+🎛️ Tabela de limites (api/limites/*) — CRUD + versionamento + sync bidirecional com firmware (ACK, auditoria, lock pessimista)
+☁️ Integração SolisCloud (api/solis/*) — fallback automático quando firmware offline (HMAC-SHA1 + Base64)
+📜 Documentação do contrato de API firmware ↔ cloud em docs/CONTRATO_API.md
+9.3 Sinalizações para o CIP Firmware Copilot
+🔇 Nenhuma — sessão 100% web. Próxima interface com firmware será no módulo de tabela de limites
+🏁 10. STATUS DA SESSÃO
+
+
+
+Indicador	Valor
+🎯 Objetivo cumprido	✅ Sim, integralmente
+🐛 Bugs introduzidos	❌ Nenhum
+🧪 Funcionalidades validadas	Login, tema claro/escuro, energia.php
+📚 Aprendizados documentados	✅ Lições sobre duplicatas + diagnóstico de sessão
+🚪 Pode fechar etapa?	✅ Sim
+🍻 Sessão fechada com sucesso, Fernando. O projeto ficou um passo mais limpo, a arquitetura de tema está formalmente documentada, e ainda colhemos uma boa lição sobre não confundir CSRF antigo com bug novo.
+
+Quando voltar, é só me apontar o próximo módulo (aposto que é api/limites/* 🎯) ou colar este status para retomarmos com contexto completo. Até a próxima! 🚀

@@ -1,0 +1,580 @@
+/**
+ * Arquivo: assets/css/app.css
+ * Projeto: Controlador de Injeção de Potência Elétrica
+ * Objetivo: Folha de estilo global reutilizável para padronização visual do sistema.
+ *
+ * Dependências de hardware:
+ *   - Servidor web para entrega de arquivos estáticos
+ *   - Navegador com suporte a CSS moderno
+ *
+ * Dependências de software/arquivos instalados:
+ *   - Todas as páginas PHP do sistema
+ *
+ * Histórico de implementações:
+ *   2026-03-22  Criação da folha global de estilos
+ *   2026-03-22  Suporte à classe .card-value para dashboard
+ *   2026-04-11  Fix responsividade global mobile:
+ *               • html font-size responsivo com clamp()
+ *               • .container padding adaptativo
+ *               • .table-base min-width protegido com overflow
+ *               • .btn sem width:100% forçado globalmente
+ *               • .topbar-inner alinhamento mobile corrigido
+ *               • Removido min-width fixo que forçava zoom-out no iOS/Android
+ *               Correção dos ENUMs de perfil:
+ *               • master / master_operador / administrador / operador / usuario
+ */
+
+/* ══════════════════════════════════════════════
+   TOKENS GLOBAIS
+══════════════════════════════════════════════ */
+:root {
+    --cor-fundo:            #f3f6fb;
+    --cor-superficie:       #ffffff;
+    --cor-superficie-suave: #f8fafc;
+    --cor-borda:            #dbe3ee;
+    --cor-texto:            #1f2937;
+    --cor-texto-suave:      #64748b;
+    --cor-topbar:           #0f172a;
+    --cor-topbar-texto:     #ffffff;
+
+    --cor-primaria:   #2563eb;
+    --cor-secundaria: #334155;
+    --cor-sucesso:    #15803d;
+    --cor-perigo:     #dc2626;
+    --cor-aviso:      #d97706;
+    --cor-neutra:     #e2e8f0;
+
+    --sombra-padrao: 0 8px 24px rgba(15, 23, 42, 0.08);
+
+    --raio-painel:   14px;
+    --raio-controle: 10px;
+
+    --largura-maxima:    1400px;
+    --espacamento-pagina: 16px;
+
+    /* Perfis — badge colors */
+    --cor-master:         #7c3aed;
+    --cor-master-op:      #9333ea;
+    --cor-administrador:  #2563eb;
+    --cor-operador:       #0891b2;
+    --cor-usuario:        #059669;
+}
+
+/* ══════════════════════════════════════════════
+   RESET BASE
+   CRÍTICO MOBILE: sem largura mínima forçada
+   que cause zoom-out no iOS/Android
+══════════════════════════════════════════════ */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    /*
+     * CRÍTICO: font-size fluido evita que o browser
+     * "encolha" a página para caber conteúdo fixo.
+     * clamp(13px, 3.5vw, 16px) → 13px mobile, 16px desktop
+     */
+    font-size: clamp(13px, 3.5vw, 16px);
+    /* Evita zoom automático ao focar inputs no iOS */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--cor-fundo);
+    color: var(--cor-texto);
+    /* CRÍTICO: nunca bloquear scroll vertical */
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* Suaviza scroll em iOS */
+    -webkit-overflow-scrolling: touch;
+}
+
+a {
+    color: inherit;
+}
+
+/* ══════════════════════════════════════════════
+   CARD VALUE (dashboard)
+══════════════════════════════════════════════ */
+.card-value {
+    font-size: clamp(22px, 5vw, 30px);
+    font-weight: bold;
+}
+
+/* ══════════════════════════════════════════════
+   TOPBAR
+══════════════════════════════════════════════ */
+.topbar {
+    background: var(--cor-topbar);
+    color: var(--cor-topbar-texto);
+    padding: 16px 20px;
+}
+
+.topbar-inner {
+    max-width: var(--largura-maxima);
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.brand-block h1,
+.topbar h1 {
+    margin: 0 0 4px 0;
+    font-size: clamp(18px, 4vw, 28px);
+    line-height: 1.2;
+}
+
+.subtitle {
+    margin: 0;
+    color: #cbd5e1;
+    font-size: clamp(12px, 3vw, 14px);
+}
+
+.top-links {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* ══════════════════════════════════════════════
+   CONTAINER PRINCIPAL
+══════════════════════════════════════════════ */
+.container {
+    max-width: var(--largura-maxima);
+    margin: 20px auto;
+    /*
+     * CRÍTICO MOBILE: padding horizontal adequado
+     * evita conteúdo colado na borda
+     */
+    padding: 0 clamp(12px, 4vw, 24px) 40px;
+}
+
+/* ══════════════════════════════════════════════
+   ALERTAS
+══════════════════════════════════════════════ */
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--raio-controle);
+    margin-bottom: 16px;
+    font-size: 14px;
+    border: 1px solid transparent;
+    /* MOBILE: quebra texto longo */
+    word-break: break-word;
+}
+
+.alert-success {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.alert-error {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+.alert-warning {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+.alert-info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+
+/* ══════════════════════════════════════════════
+   CARDS E PAINÉIS
+══════════════════════════════════════════════ */
+.card,
+.panel {
+    background: var(--cor-superficie);
+    border: 1px solid var(--cor-borda);
+    border-radius: var(--raio-painel);
+    box-shadow: var(--sombra-padrao);
+    /* MOBILE: evita overflow horizontal interno */
+    overflow: hidden;
+}
+
+.panel {
+    padding: clamp(14px, 4vw, 20px);
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.panel-header h2,
+.panel h2 {
+    margin: 0;
+    font-size: clamp(16px, 4vw, 22px);
+}
+
+/* ══════════════════════════════════════════════
+   FORMULÁRIOS
+══════════════════════════════════════════════ */
+.field {
+    display: grid;
+    gap: 6px;
+    /* MOBILE: campo nunca ultrapassa container */
+    min-width: 0;
+}
+
+.field label {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="password"],
+.field input[type="number"],
+.field input[type="search"],
+.field input[type="date"],
+.field select,
+.field textarea {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--raio-controle);
+    /*
+     * CRÍTICO iOS: font-size >= 16px evita zoom
+     * automático ao focar o campo
+     */
+    font-size: max(16px, 14px);
+    background: #ffffff;
+    color: var(--cor-texto);
+    /* MOBILE: evita overflow horizontal */
+    max-width: 100%;
+}
+
+.field textarea {
+    min-height: 110px;
+    resize: vertical;
+}
+
+.checkbox-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    flex-wrap: wrap;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.form-actions,
+.actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+/* ══════════════════════════════════════════════
+   BOTÕES
+══════════════════════════════════════════════ */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-decoration: none;
+    border: none;
+    border-radius: var(--raio-controle);
+    padding: 10px 16px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1.2;
+    white-space: nowrap;
+    /* MOBILE: área de toque mínima */
+    min-height: 44px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.btn:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+}
+
+.btn-primary   { background: var(--cor-primaria);   color: #ffffff; }
+.btn-secondary { background: var(--cor-secundaria); color: #ffffff; }
+.btn-danger    { background: var(--cor-perigo);     color: #ffffff; }
+.btn-warning   { background: var(--cor-aviso);      color: #ffffff; }
+.btn-success   { background: var(--cor-sucesso);    color: #ffffff; }
+.btn-light     { background: var(--cor-neutra);     color: #0f172a; }
+
+.btn-small {
+    padding: 7px 12px;
+    font-size: 13px;
+    min-height: 36px;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+/* ══════════════════════════════════════════════
+   TABELAS
+   CRÍTICO: nunca min-width fixo no body da tabela
+   Sempre envolver em .table-wrap com overflow-x
+══════════════════════════════════════════════ */
+.table-wrap {
+    overflow-x: auto;
+    /* Scroll suave no iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Indica visualmente que é scrollável */
+    border-radius: var(--raio-painel);
+    border: 1px solid var(--cor-borda);
+}
+
+.table-base {
+    width: 100%;
+    border-collapse: collapse;
+    /*
+     * CORRIGIDO: era 950px sem proteção.
+     * Agora o .table-wrap absorve o overflow.
+     * Mantemos min-width para desktop ficar correto,
+     * mas o scroll horizontal no mobile funciona.
+     */
+    min-width: 640px;
+}
+
+.table-base th,
+.table-base td {
+    text-align: left;
+    padding: 12px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
+    font-size: 14px;
+    /* MOBILE: células não quebram layout */
+    white-space: nowrap;
+}
+
+.table-base td.wrap-cell {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.table-base th {
+    background: var(--cor-superficie-suave);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cor-texto-suave);
+}
+
+.table-base tbody tr:hover {
+    background: #f8fafc;
+}
+
+.table-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+.table-actions form {
+    margin: 0;
+}
+
+/* ══════════════════════════════════════════════
+   BADGES DE PERFIL
+══════════════════════════════════════════════ */
+.badge-perfil {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.badge-master        { background: #ede9fe; color: var(--cor-master);        border: 1px solid #c4b5fd; }
+.badge-master_operador { background: #f3e8ff; color: var(--cor-master-op);   border: 1px solid #d8b4fe; }
+.badge-administrador { background: #dbeafe; color: var(--cor-administrador); border: 1px solid #93c5fd; }
+.badge-operador      { background: #cffafe; color: var(--cor-operador);      border: 1px solid #67e8f9; }
+.badge-usuario       { background: #d1fae5; color: var(--cor-usuario);       border: 1px solid #6ee7b7; }
+
+/* ══════════════════════════════════════════════
+   STATUS ATIVO / INATIVO
+══════════════════════════════════════════════ */
+.badge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.badge-ativo   { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.badge-inativo { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+/* ══════════════════════════════════════════════
+   PAGINAÇÃO
+══════════════════════════════════════════════ */
+.paginacao {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.paginacao a,
+.paginacao span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid var(--cor-borda);
+    background: var(--cor-superficie);
+    color: var(--cor-texto);
+    transition: background 0.2s;
+}
+
+.paginacao a:hover    { background: #eff6ff; color: var(--cor-primaria); }
+.paginacao .atual     { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
+.paginacao .desligada { opacity: 0.4; pointer-events: none; }
+
+/* ══════════════════════════════════════════════
+   UTILITÁRIOS
+══════════════════════════════════════════════ */
+.text-center  { text-align: center; }
+.text-right   { text-align: right; }
+.text-muted   { color: var(--cor-texto-suave); }
+.text-danger  { color: var(--cor-perigo); }
+.text-success { color: var(--cor-sucesso); }
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: 8px; }
+.mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+.d-none   { display: none !important; }
+.d-flex   { display: flex; }
+.gap-1    { gap: 8px; }
+.gap-2    { gap: 16px; }
+.w-100    { width: 100%; }
+.flex-wrap { flex-wrap: wrap; }
+
+/* ══════════════════════════════════════════════
+   RESPONSIVO
+══════════════════════════════════════════════ */
+
+/* Tablet */
+@media (max-width: 1024px) {
+    .form-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+}
+
+/* Mobile grande (≤ 768px) */
+@media (max-width: 768px) {
+    .topbar-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .top-links {
+        width: 100%;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    /* Botões de ação da tabela empilham verticalmente */
+    .table-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .table-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .form-actions,
+    .actions {
+        flex-direction: column;
+    }
+
+    .form-actions .btn,
+    .actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Mobile pequeno (≤ 480px) */
+@media (max-width: 480px) {
+    .container {
+        padding: 0 12px 32px;
+    }
+
+    .panel {
+        padding: 14px 12px;
+        border-radius: 10px;
+    }
+
+    .table-base th,
+    .table-base td {
+        padding: 10px 8px;
+        font-size: 13px;
+    }
+
+    .btn {
+        font-size: 13px;
+        padding: 9px 14px;
+    }
+}

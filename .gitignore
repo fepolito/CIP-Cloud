@@ -1,0 +1,93 @@
+﻿# ============================================================
+# CIP Cloud — .gitignore
+# ============================================================
+
+# Credenciais e configuração sensível
+/config/database.php
+/config/soliscloud.php
+/.env
+/.env.*
+!/.env.example
+
+# Logs
+*.log
+/logs/
+/storage/logs/
+
+# Cache e temporários
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Editores e IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Dependências (caso futuramente use Composer/npm)
+/vendor/
+/node_modules/
+composer.phar
+package-lock.json
+
+# Uploads de usuários (NÃO versionar)
+/public_html/uploads/
+/public_html/storage/uploads/
+
+# Builds e dumps
+*.sql.gz
+*.zip
+*.tar.gz
+/backup/
+/dumps/
+
+# Sistema operacional
+desktop.ini
+
+# === Adicionado em 2026-06-05 (limpeza inicial) ===
+# Config de sync prod->teste (contem token sensivel)
+/config/sync.php
+
+# Config local do PHP (Laragon)
+php.ini
+
+# Config local do PHP por diretorio
+.user.ini
+
+# Backups locais (nao versionar)
+/_backups/
+
+
+# Logs de runtime (PHP error_log)
+error_log
+*.log
+
+# Estado runtime de ferramentas dev
+tools/sync_state.json
+
+# ==============================================
+# Credenciais e configs sensiveis adicionais
+# ==============================================
+/api/config/env.php
+
+# ==============================================
+# Storage runtime (sessions, locks, backups, cache)
+# ==============================================
+/storage/sessions/*
+!/storage/sessions/.htaccess
+/storage/backups/
+/storage/install.lock
+/storage/cache/
+/storage/logs/
+/storage/tmp/
+
+# ==============================================
+# Uploads (conteudo de cliente)
+# ==============================================
+/uploads/*
+!/uploads/.gitkeep

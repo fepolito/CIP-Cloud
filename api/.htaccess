@@ -1,0 +1,21 @@
+# ============================================================
+# Projeto  : CIP — Controlador de Injeção de Potência Elétrica
+# Arquivo  : api/.htaccess
+# Objetivo : Redirecionar todas as rotas para o index.php
+# ----------------------------------------------------------
+# Dependências de hardware : Nenhuma
+# Dependências de arquivos : api/index.php
+# ----------------------------------------------------------
+# Histórico:
+#   2026-04-06  v1.0.0  Criação do roteador Apache para a API
+# ============================================================
+
+Options -Indexes
+Options -MultiViews
+
+RewriteEngine On
+
+# ── Redireciona tudo para index.php (exceto arquivos reais) ──
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]

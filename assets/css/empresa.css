@@ -1,0 +1,191 @@
+/**
+ * Arquivo: assets/css/empresa.css
+ * Projeto: Controlador de Injeção de Potência Elétrica
+ * Objetivo: Estilos específicos da tela de cadastro da empresa (white-label)
+ *
+ * Dependências de hardware:
+ * - Servidor web para entrega de arquivos estáticos
+ * - Navegador moderno com suporte a CSS responsivo
+ *
+ * Dependências de software/arquivos instalados:
+ * - assets/css/app.css
+ * - empresa.php
+ *
+ * Histórico de implementações:
+ * - 2026-03-26 14:49:28: criação do CSS específico para cadastro da empresa
+ * - 2026-03-26 14:49:28: inclusão de estilos para formulário responsivo e preview de logo
+ * - 2023-04-02 10:25: implemenando o upload de LOGO
+ */
+
+.empresa-container {
+    display: grid;
+    gap: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.empresa-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.form-empresa {
+    display: grid;
+    gap: 20px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-group-full {
+    grid-column: 1 / -1;
+}
+
+.form-label.required::after {
+    content: ' *';
+    color: #ef4444;
+}
+
+.form-textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 12px;
+}
+
+.logo-preview-area {
+    padding: 20px;
+}
+
+.logo-current {
+    text-align: center;
+}
+
+.logo-image {
+    max-width: 200px;
+    max-height: 120px;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.logo-info {
+    margin-top: 12px;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.logo-placeholder {
+    text-align: center;
+    padding: 40px 20px;
+    background: #f9fafb;
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    color: #6b7280;
+}
+
+.logo-placeholder-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.logo-placeholder p {
+    margin: 8px 0;
+}
+
+.empresa-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.summary-item {
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.summary-item strong {
+    color: #374151;
+    display: block;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.text-muted {
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+@media (max-width: 900px) {
+    .empresa-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .empresa-summary {
+        grid-template-columns: 1fr;
+    }
+    
+    .logo-placeholder {
+        padding: 30px 16px;
+    }
+    
+    .logo-placeholder-icon {
+        font-size: 36px;
+    }
+}
+.logo-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.logo-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 12px 20px;
+    border-radius: var(--raio-controle);
+}
+
+.logo-upload-form input[type="file"] {
+    display: none;
+}
+
+.logo-upload-form:hover .logo-upload-btn {
+    background: #1d4ed8 !important;
+    transform: translateY(-1px);
+}
+
+@media (max-width: 600px) {
+    .logo-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .logo-actions .btn {
+        width: 100%;
+    }
+}
