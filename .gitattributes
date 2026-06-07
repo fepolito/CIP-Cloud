@@ -1,0 +1,22 @@
+﻿# Forca LF em arquivos de codigo, independente do SO do dev
+*.php   text eol=lf
+*.js    text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+
+# Forca CRLF apenas em arquivos Windows nativos
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binarios (sem conversao)
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
