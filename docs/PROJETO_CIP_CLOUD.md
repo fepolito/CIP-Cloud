@@ -106,6 +106,8 @@ phpMyAdmin local    ─── SQL manual ──▶  phpMyAdmin prod
 
 ## 4. 📂 Estrutura de arquivos
 
+Lembrar que o doc_root é a raiz do projeto (não public_html)
+
 ### 4.1 Ambiente DEV (Laragon — `C:\laragon\www\monitor.aeonium.com.br\`)
 
 ```
@@ -321,6 +323,203 @@ Estrutura **espelha o DEV** com as seguintes diferenças naturais:
 | `comandos_controle` | Comandos enviados ao firmware (sync bidirecional) |
 | `sync_controle` | Auditoria de sincronização firmware↔cloud |
 | `logs_sistema` | Auditoria geral do sistema |
+
+### Todas as tabelas 
+
+Tabela:  controladores:
+
+id (int)
+codigo (varchar(20))
+apelido (varchar(100))
+tipo (varchar(80))
+local_instalacao (varchar(200), nullable)
+timezone (varchar(50))
+ip_address (varchar(45), nullable)
+porta (int, nullable)
+empresa_id (int unsigned, nullable)
+cliente_nome (varchar(150), nullable)
+token_api_hash (varchar(255))
+hmac_secret (varchar(128), nullable)
+status (enum('ativo','inativo','manutencao','erro'), nullable)
+fw_version (varchar(20), nullable)
+last_seen_at (timestamp, nullable)
+last_telemetry_at (timestamp, nullable)
+observacoes (text, nullable)
+created_at (timestamp)
+updated_at (timestamp)
+online (tinyint(1), nullable)
+controle_exportacao_ativo (tinyint(1))
+modo_controle (enum('grid_zero','limite_tabela','desativado'))
+potencia_nominal_kw (decimal(7,3), nullable)
+potencia_pico_90d_kw (decimal(7,3), nullable)
+controle_versao (int unsigned)
+controle_atualizado_em (datetime, nullable)
+controle_origem (enum('local','cloud','app','firmware_boot'), nullable)
+ultimo_contato (datetime, nullable)
+
+Tabela: telemetria_5min:
+
+id (bigint unsigned)
+controlador_id (int)
+timestamp_utc (timestamp)
+potencia_importada_w (decimal(10,2), nullable)
+potencia_exportada_w (decimal(10,2), nullable)
+potencia_geracao_w (decimal(10,2), nullable)
+potencia_consumo_total_w (decimal(10,2), nullable)
+energia_importada_kwh (decimal(12,4), nullable)
+energia_exportada_kwh (decimal(12,4), nullable)
+energia_geracao_kwh (decimal(12,4), nullable)
+energia_ativa_total_kwh (decimal(12,4), nullable)
+energia_reativa_total_kvarh (decimal(12,4), nullable)
+energia_reativa_import_kvarh (decimal(12,4), nullable)
+energia_reativa_export_kvarh (decimal(12,4), nullable)
+is_exporting (tinyint(1), nullable)
+direction_valid (tinyint(1), nullable)
+power_injected_w (decimal(10,2), nullable)
+meter_read_errors (int unsigned, nullable)
+meter_retry_recoveries (int unsigned, nullable)
+meter_optional_failures (int unsigned, nullable)
+inversor_read_errors (int unsigned, nullable)
+geracao_origem (enum('inversor','estimado','api_externa','indisponivel'), nullable)
+qualidade_dado (tinyint unsigned, nullable)
+firmware_versao (varchar(20), nullable)
+limite_exportacao_ativo_w (decimal(10,2), nullable)
+status_inversor (varchar(50), nullable)
+tensao_rede_v (decimal(6,2), nullable)
+tensao_fase_a_v (decimal(6,2), nullable)
+tensao_fase_b_v (decimal(6,2), nullable)
+tensao_fase_c_v (decimal(6,2), nullable)
+corrente_fase_a_a (decimal(8,3), nullable)
+corrente_fase_b_a (decimal(8,3), nullable)
+corrente_fase_c_a (decimal(8,3), nullable)
+potencia_ativa_fase_a_w (decimal(10,2), nullable)
+potencia_ativa_fase_b_w (decimal(10,2), nullable)
+potencia_ativa_fase_c_w (decimal(10,2), nullable)
+potencia_ativa_total_w (decimal(10,2), nullable)
+potencia_reativa_fase_a_var (decimal(10,2), nullable)
+potencia_reativa_fase_b_var (decimal(10,2), nullable)
+potencia_reativa_fase_c_var (decimal(10,2), nullable)
+potencia_reativa_total_var (decimal(10,2), nullable)
+potencia_aparente_fase_a_va (decimal(10,2), nullable)
+potencia_aparente_fase_b_va (decimal(10,2), nullable)
+potencia_aparente_fase_c_va (decimal(10,2), nullable)
+potencia_aparente_total_va (decimal(10,2), nullable)
+fator_potencia_fase_a (decimal(4,3), nullable)
+fator_potencia_fase_b (decimal(4,3), nullable)
+fator_potencia_fase_c (decimal(4,3), nullable)
+frequencia_rede_hz (decimal(5,2), nullable)
+frequencia_fase_a_hz (decimal(5,2), nullable)
+frequencia_fase_b_hz (decimal(5,2), nullable)
+frequencia_fase_c_hz (decimal(5,2), nullable)
+fator_potencia_total (decimal(4,3), nullable)
+temperatura_inversor_c (decimal(5,2), nullable)
+
+
+
+Tabela: leituras_energia
+  - id (bigint unsigned)
+  - controlador_id (int)
+  - tipo_leitura (enum('consumo_local','importacao','geracao','injecao'))
+  - fase (enum('monofasico','bifasico','trifasico'))
+  - tensao_v (decimal(10,2))
+  - corrente_a (decimal(10,2))
+  - potencia_kw (decimal(12,3))
+  - energia_kwh (decimal(14,3))
+  - frequencia_hz (decimal(10,2))
+  - fator_potencia (decimal(6,3))
+  - timestamp_medicao (datetime)
+  - criado_em (datetime)
+
+Tabela: empresa
+  - id (int unsigned)
+  - nome_fantasia (varchar(120))
+  - tipo (enum('cliente_real','integradora_virtual','parceiro','demo'))
+  - ativo (tinyint(1))
+  - observacoes (text)
+  - razao_social (varchar(200))
+  - cnpj (varchar(18))
+  - email (varchar(150))
+  - telefone (varchar(20))
+  - endereco (text)
+  - logo_path (varchar(255))
+  - logo_updated_at (timestamp)
+  - created_at (timestamp)
+  - updated_at (timestamp)
+  - deleted_at (datetime)
+  - deleted_by (int unsigned)
+
+Tabela: usuarios
+  - id (int unsigned)
+  - nome (varchar(120))
+  - email (varchar(150))
+  - senha_hash (varchar(255))
+  - perfil (enum('master','master_operador','administrador','operador','usuario'))
+  - tema (enum('claro','escuro'))
+  - modo_visualizacao (enum('tudo','empresa','controlador'))
+  - empresa_selecionada_id (int unsigned)
+  - controlador_selecionado_id (int)
+  - papel_global (enum('master','master_operador'))
+  - empresa_id (int unsigned)
+  - ativo (tinyint(1))
+  - criado_por (int unsigned)
+  - criado_em (datetime)
+  - atualizado_em (datetime)
+  - deleted_at (datetime)
+  - deleted_by (int unsigned)
+
+Tabela: usuario_empresa
+  - id (int unsigned)
+  - usuario_id (int unsigned)
+  - empresa_id (int unsigned)
+  - papel_empresa (enum('administrador','operador','usuario'))
+  - ativo (tinyint(1))
+  - criado_em (datetime)
+  - criado_por (int unsigned)
+  - atualizado_em (datetime)
+  - deleted_at (datetime)
+  - deleted_by (int unsigned)
+
+Tabela: comandos_controle
+  - id (bigint unsigned)
+  - controlador_id (int)
+  - usuario_id (int unsigned)
+  - comando (varchar(100))
+  - parametros (json)
+  - status_execucao (enum('pendente','enviado','executado','falhou','cancelado'))
+  - resposta_equipamento (text)
+  - criado_em (datetime)
+  - executado_em (datetime)
+
+Tabela: logs_sistema
+  - id (bigint unsigned)
+  - nivel (enum('INFO','WARN','ERROR','DEBUG'))
+  - controlador_id (int)
+  - usuario_id (int unsigned)
+  - ip_origem (varchar(45))
+  - origem (varchar(100))
+  - mensagem (text)
+  - contexto (json)
+  - criado_em (datetime)
+
+Tabela: sync_controle
+  - tabela (varchar(64))
+  - modo_incremental (enum('por_id','por_timestamp'))
+  - ultimo_id (bigint unsigned)
+  - ultimo_timestamp (datetime)
+  - registros_total (bigint unsigned)
+  - ultima_execucao (datetime)
+  - ultimo_status (enum('ok','erro','rodando'))
+  - ultima_mensagem (varchar(500))
+  - duracao_ms (int unsigned)
+  - atualizado_em (timestamp)
+
+[Tabelas de Backup do dia 16/05/2026]
+Tabela: _bkp_empresa_20260516
+Tabela: _bkp_usuarios_20260516
+Tabela: _bkp_usuarios_pre_multitenant
+
+
+
 
 ### 5.3 Tabelas legadas (ignorar)
 
@@ -737,7 +936,7 @@ ATGY **aplica, salva e testa** sem intervenção manual de Fernando.
 **Fluxo padrão:**
 [Copilot gera patch] → [Fernando aprova] → [Copilot escreve prompt para ATGY] ↓ [ATGY aplica + testa] → [ATGY devolve diff + output] → [Copilot valida] ↓ [Fechamento de etapa em STATUS_CLOUD.md]
 
-
+nn
 
 
 ### 16.3 Regras obrigatórias de cabeçalho
@@ -859,5 +1058,15 @@ Toda alteração feita pelo ATGY deve, no fechamento de etapa, ser registrada em
 Caminho relativo
 Versão antes → versão depois
 Motivo da alteração (1 linha)
+
+Tópico;	Decisão de hoje 07-06-2026 14:46;	Atualiza qual item do plano F1.B?
+🎬 Infográfico SVG animado de fundo;	Aprovado, com 5 estados (export/import/noturno/bat-carga/bat-descarga);	➕ NOVO — não estava no STATUS, entra como item adicional
+⭕ Range dos gauges;	Dinâmico: +20% nominal, calibra com pico 90d;	🔄 Refina Sessão 1 (cards instantâneos)
+⏱️ Polling;	5min (não 10s como STATUS sugeria);	🔄 Conflito resolvido — STATUS dizia 10s, você decidiu 5min
+📅 Energia Hoje/Mês;	Barras horizontais + delta vs ontem/mês passado;	🔄 Refina cards instantâneos
+⭐ Média 12m;	Toggle rolante / ano calendário;	🔄 Refina Sessão 2 (responde decisão #2 do STATUS)
+📐 Card cos φ trifásico;	3 ponteiros SVG vanilla + régua híbrida	;➕ NOVO — não estava no STATUS
+🌐 Status offline global	;Componente compartilhado;	➕ NOVO
+
 
 **FIM DO DOCUMENTO**
