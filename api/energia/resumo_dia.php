@@ -1,187 +1,206 @@
 <?php
-/**
- * Historico:
- *   2026-06-05  v1.0.0  Criacao
- *   2026-06-06  v1.1.0  Correcao: consumo_total agora e calculado em PHP.
- *                       Motivo: firmware nao popula energia_ativa_total_kwh
- *                       (sempre 0.0000). Workaround documentado, com flag
- *                       CALCULAR_CONSUMO_NO_PHP para reversao futura quando
- *                       firmware for corrigido (ver docs/CONTRATO_API.md).
- */
+// ============================================================
+// Projeto      : CIP - Controlador de Injecao de Potencia Eletrica
+// Arquivo      : api/energia/resumo_dia.php
+// Versao       : v1.0.0
+// Data         : 2026-06-07
+// Objetivo     : Retornar agregado do dia corrente para o dashboard
+// Dependencias : config/app.php, config/database.php, app/auth.php, app/helpers/Tenant.php
+// Tabelas      : controladores, telemetria_5min
+// Parametros   : controlador_id (int)
+// Retorno      : JSON com agregacao diaria
+// Historico    :
+//   2026-06-07  v1.0.0  Criacao inicial
+// ============================================================
+
 declare(strict_types=1);
 
-// ─── Flag de comportamento ────────────────────────────────────────
-// TRUE  → cloud calcula consumo_total via formula canonica (estado atual)
-// FALSE → cloud le energia_ativa_total_kwh direto do banco (quando firmware corrigir)
-const CALCULAR_CONSUMO_NO_PHP = true;
+$serverName = $_SERVER['SERVER_NAME'] ?? '';
+$is_dev = ($serverName === 'localhost' 
+        || str_ends_with($serverName, '.local') 
+        || str_ends_with($serverName, '.test'));
 
-$is_dev = ($_SERVER['SERVER_NAME'] ?? '') === 'localhost'
-       || str_contains($_SERVER['HTTP_HOST'] ?? '', '.local')
-       || str_contains($_SERVER['HTTP_HOST'] ?? '', '.test');
-
-ini_set('display_errors', $is_dev ? '1' : '0');
-ini_set('display_startup_errors', $is_dev ? '1' : '0');
+if ($is_dev) {
+    ini_set('display_errors', '1');
+} else {
+    ini_set('display_errors', '0');
+}
 error_reporting(E_ALL);
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-cache, must-revalidate');
 
 require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../app/auth.php';
+require_once __DIR__ . '/../../app/helpers/Tenant.php';
 
-// Entrada
-$controlador_id = filter_input(INPUT_GET, 'controlador_id', FILTER_VALIDATE_INT);
-$data = filter_input(INPUT_GET, 'data', FILTER_SANITIZE_SPECIAL_CHARS);
+use app\helpers\Tenant;
 
-if (!$controlador_id || $controlador_id <= 0) {
+$usuario = authUsuario();
+
+$controladorId = filter_input(INPUT_GET, 'controlador_id', FILTER_VALIDATE_INT);
+if ($controladorId === false || $controladorId === null || $controladorId <= 0) {
     http_response_code(400);
-    echo json_encode(['erro' => 'Parâmetro controlador_id inválido ou ausente.', 'detalhe' => null]);
-    exit;
-}
-
-if (!$data || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $data)) {
-    http_response_code(400);
-    echo json_encode(['erro' => 'Parâmetro data inválido. Use o formato YYYY-MM-DD.', 'detalhe' => null]);
-    exit;
-}
-
-$parts = explode('-', $data);
-if (!checkdate((int)$parts[1], (int)$parts[2], (int)$parts[0])) {
-    http_response_code(400);
-    echo json_encode(['erro' => 'Data inválida.', 'detalhe' => null]);
+    echo json_encode(['sucesso' => false, 'erro' => 'Parametro controlador_id ausente ou invalido', 'detalhe' => null], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 try {
     $pdo = getDbConnection();
+} catch (Throwable $e) {
+    http_response_code(503);
+    echo json_encode(['sucesso' => false, 'erro' => 'Banco de dados indisponivel', 'detalhe' => $is_dev ? $e->getMessage() : null], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
-    // Validar controlador
-    $stmtCtrl = $pdo->prepare("SELECT id, codigo, apelido, timezone FROM controladores WHERE id = :id LIMIT 1");
-    $stmtCtrl->execute([':id' => $controlador_id]);
+try {
+    $filtroTenant = Tenant::filtroSQL('c');
+    $sqlCtrl = "
+        SELECT c.id, c.codigo, c.apelido, c.timezone, c.modo_controle, 
+               c.controle_exportacao_ativo, c.potencia_nominal_kw, c.potencia_pico_90d_kw
+          FROM controladores c
+         WHERE c.id = :id
+           {$filtroTenant}
+         LIMIT 1
+    ";
+    
+    $paramsCtrl = [':id' => $controladorId];
+    Tenant::aplicarParam($paramsCtrl);
+    
+    $stmtCtrl = $pdo->prepare($sqlCtrl);
+    $stmtCtrl->execute($paramsCtrl);
     $controlador = $stmtCtrl->fetch(PDO::FETCH_ASSOC);
-
+    
     if (!$controlador) {
-        http_response_code(404);
-        echo json_encode(['erro' => "Controlador ID {$controlador_id} não encontrado.", 'detalhe' => null]);
+        $stmtCheck = $pdo->prepare("SELECT id FROM controladores WHERE id = :id LIMIT 1");
+        $stmtCheck->execute([':id' => $controladorId]);
+        if ($stmtCheck->fetch()) {
+            http_response_code(403);
+            echo json_encode(['sucesso' => false, 'erro' => 'Acesso negado a este controlador', 'detalhe' => null], JSON_UNESCAPED_UNICODE);
+        } else {
+            http_response_code(404);
+            echo json_encode(['sucesso' => false, 'erro' => 'Controlador nao encontrado', 'detalhe' => null], JSON_UNESCAPED_UNICODE);
+        }
         exit;
     }
-
-    $timezone = $controlador['timezone'] ?? 'America/Sao_Paulo';
-
-    // Headers de cache
-    $dtHoje = new DateTime('now', new DateTimeZone($timezone));
-    $hojeLocal = $dtHoje->format('Y-m-d');
-    if ($data < $hojeLocal) {
-        header('Cache-Control: public, max-age=3600');
-    } else {
-        header('Cache-Control: no-cache, must-revalidate');
+    
+    $tzStr = $controlador['timezone'] ?: 'America/Sao_Paulo';
+    try {
+        $tz = new DateTimeZone($tzStr);
+    } catch (Exception $e) {
+        $tz = new DateTimeZone('America/Sao_Paulo');
+        $tzStr = 'America/Sao_Paulo';
     }
-
-    // Consulta de agregados
-    $sql = "
+    
+    $dtInicio = new DateTimeImmutable('today', $tz);
+    $dtFim    = $dtInicio->modify('+1 day');
+    
+    $inicioUtc = $dtInicio->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $fimUtc    = $dtFim->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    
+    $sqlData = "
         SELECT 
-            COALESCE(MAX(energia_geracao_kwh) - MIN(energia_geracao_kwh), 0) AS geracao_kwh,
-            COALESCE(MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh), 0) AS exportada_kwh,
-            COALESCE(MAX(energia_importada_kwh) - MIN(energia_importada_kwh), 0) AS importada_kwh,
-            COALESCE(MAX(energia_ativa_total_kwh) - MIN(energia_ativa_total_kwh), 0) AS consumo_total_kwh_firmware,
-            
-            COALESCE(MAX(potencia_geracao_w) / 1000, 0) AS pico_geracao_kw,
-            COALESCE(MAX(potencia_exportada_w) / 1000, 0) AS pico_exportada_kw,
-            COALESCE(MAX(potencia_importada_w) / 1000, 0) AS pico_importada_kw,
-            COALESCE(MAX(potencia_consumo_total_w) / 1000, 0) AS pico_consumo_kw,
-            
-            COUNT(*) AS total_registros
+          COALESCE(MAX(energia_importada_kwh) - MIN(energia_importada_kwh), 0) AS importada_kwh,
+          COALESCE(MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh), 0) AS exportada_kwh,
+          COALESCE(MAX(energia_geracao_kwh)   - MIN(energia_geracao_kwh),   0) AS geracao_kwh,
+          COALESCE(
+            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) -
+            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)),
+            0
+          ) AS consumo_kwh,
+          COALESCE(AVG(potencia_importada_w), 0) AS pot_media_importada_w,
+          COALESCE(AVG(potencia_exportada_w), 0) AS pot_media_exportada_w,
+          COALESCE(AVG(potencia_geracao_w),   0) AS pot_media_geracao_w,
+          COALESCE(AVG(potencia_importada_w) - AVG(potencia_exportada_w), 0) AS pot_media_consumo_w,
+          COALESCE(AVG(qualidade_dado), 0) AS qualidade_media,
+          COUNT(*) AS amostras,
+          SUM(CASE WHEN geracao_origem = 'indisponivel' THEN 1 ELSE 0 END) AS amostras_sem_inversor
         FROM telemetria_5min
-        WHERE controlador_id = :id
-          AND DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz)) = :data
+        WHERE controlador_id = :cid
+          AND timestamp_utc >= :inicio_utc
+          AND timestamp_utc <  :fim_utc
     ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':id' => $controlador_id,
-        ':tz' => $timezone,
-        ':data' => $data
+    
+    $stmtData = $pdo->prepare($sqlData);
+    $stmtData->execute([
+        ':cid' => $controladorId,
+        ':inicio_utc' => $inicioUtc,
+        ':fim_utc' => $fimUtc
     ]);
-
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    $geracao   = (float) $row['geracao_kwh'];
-    $exportada = (float) $row['exportada_kwh'];
-    $importada = (float) $row['importada_kwh'];
-    $consumo_firmware = (float) $row['consumo_total_kwh_firmware'];
-
-    // autoconsumo = max(0, geracao - exportada)
-    $autoconsumo = $geracao - $exportada;
-    if ($autoconsumo < 0) {
-        error_log(sprintf(
-            '[resumo_dia.php] Anomalia: autoconsumo negativo | ctrl=%d | data=%s | geracao=%.4f | exportada=%.4f',
-            $controlador_id, $data, $geracao, $exportada
-        ));
-        $autoconsumo = 0.0;
+    $linha = $stmtData->fetch(PDO::FETCH_ASSOC);
+    if (!$linha) {
+        $linha = [
+            'importada_kwh' => 0, 'exportada_kwh' => 0, 'geracao_kwh' => 0, 'consumo_kwh' => 0,
+            'pot_media_importada_w' => 0, 'pot_media_exportada_w' => 0, 'pot_media_geracao_w' => 0, 'pot_media_consumo_w' => 0,
+            'qualidade_media' => 0, 'amostras' => 0, 'amostras_sem_inversor' => 0
+        ];
     }
-
-    // consumo_total: calculado em PHP OU lido do firmware (controlado por flag)
-    if (CALCULAR_CONSUMO_NO_PHP) {
-        $consumo_total = $autoconsumo + $importada;
-        $fonte_consumo = 'cloud_calculado';
-    } else {
-        $consumo_total = $consumo_firmware;
-        $fonte_consumo = 'firmware';
-    }
-
-    $total_registros = (int) $row['total_registros'];
-    $esperado_registros = 288;
-    $cobertura_pct = round(($total_registros / $esperado_registros) * 100, 1);
-
+    
+    $agoraLocal = new DateTimeImmutable('now', $tz);
+    $segundosHoje = $agoraLocal->getTimestamp() - $dtInicio->getTimestamp();
+    $amostrasEsperadas = (int) floor(max(0, $segundosHoje) / 300);
+    if ($amostrasEsperadas < 1) $amostrasEsperadas = 1;
+    
+    $amostras = (int) $linha['amostras'];
+    $amostrasSemInversor = (int) $linha['amostras_sem_inversor'];
+    
+    $conectado = ($amostras > 0 && $amostrasSemInversor < $amostras);
+    $completudePct = ($amostras == 0) ? 0.0 : round(($amostras / $amostrasEsperadas) * 100, 1);
+    
+    $toKw = fn($w) => $w !== null ? round((float)$w / 1000.0, 3) : null;
+    $toFloat = fn($val) => $val !== null ? (float)$val : null;
+    $toRound = fn($val, $prec) => $val !== null ? round((float)$val, $prec) : null;
+    
     $resposta = [
-        "sucesso" => true,
-        "data" => $data,
-        "controlador_id" => $controlador_id,
-        "controlador_codigo" => $controlador['codigo'],
-        "controlador_apelido" => $controlador['apelido'],
-        "timezone" => $timezone,
-        "energia_kwh" => [
-            "geracao" => round($geracao, 4),
-            "exportada" => round($exportada, 4),
-            "importada" => round($importada, 4),
-            "consumo_total" => round($consumo_total, 4),
-            "autoconsumo" => round($autoconsumo, 4)
+        'sucesso' => true,
+        'controlador_id' => (int)$controlador['id'],
+        'timezone' => $tzStr,
+        'periodo' => [
+            'tipo'         => 'dia_corrente',
+            'inicio_local' => $dtInicio->format('c'),
+            'fim_local'    => $dtFim->format('c'),
+            'inicio_utc'   => $dtInicio->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z'),
+            'fim_utc'      => $dtFim->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z')
         ],
-        "potencia_pico_kw" => [
-            "geracao" => round((float)$row['pico_geracao_kw'], 3),
-            "exportada" => round((float)$row['pico_exportada_kw'], 3),
-            "importada" => round((float)$row['pico_importada_kw'], 3),
-            "consumo" => round((float)$row['pico_consumo_kw'], 3)
+        'energia_kwh' => [
+            'importada' => $toRound($linha['importada_kwh'], 3),
+            'exportada' => $toRound($linha['exportada_kwh'], 3),
+            'geracao'   => $toRound($linha['geracao_kwh'], 3),
+            'consumo'   => $toRound($linha['consumo_kwh'], 3)
         ],
-        "qualidade" => [
-            "total_registros" => $total_registros,
-            "esperado_registros" => $esperado_registros,
-            "cobertura_pct" => $cobertura_pct,
-            "fonte_consumo" => $fonte_consumo
+        'potencia_media_kw' => [
+            'importada' => $toKw($linha['pot_media_importada_w']),
+            'exportada' => $toKw($linha['pot_media_exportada_w']),
+            'geracao'   => $toKw($linha['pot_media_geracao_w']),
+            'consumo'   => $toKw($linha['pot_media_consumo_w'])
+        ],
+        'inversor' => [
+            'conectado'  => $conectado,
+            'observacao' => $conectado ? 'Inversor online' : 'Inversor offline (aguardando integracao Solis)'
+        ],
+        'qualidade' => [
+            'qualidade_media'    => $toRound($linha['qualidade_media'], 1),
+            'amostras'           => $amostras,
+            'amostras_esperadas' => $amostrasEsperadas,
+            'completude_pct'     => $completudePct
         ]
     ];
-
+    
     echo json_encode($resposta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (PDOException $e) {
-    error_log('[resumo_dia.php] PDO error: ' . $e->getMessage());
+    error_log('[resumo_dia.php] PDOException: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode([
-        'erro'    => 'Erro interno no banco de dados.',
-        'detalhe' => $is_dev ? $e->getMessage() : null,
-    ]);
-    exit;
+    echo json_encode(['sucesso' => false, 'erro' => 'Erro interno de banco de dados', 'detalhe' => $is_dev ? $e->getMessage() : null], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
-    error_log('[resumo_dia.php] Erro: ' . $e->getMessage() . ' em ' . $e->getFile() . ':' . $e->getLine());
+    error_log('[resumo_dia.php] Throwable: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode([
-        'erro'    => 'Erro interno do servidor.',
-        'detalhe' => $is_dev ? $e->getMessage() : null,
-    ]);
-    exit;
+    echo json_encode(['sucesso' => false, 'erro' => 'Erro interno do servidor', 'detalhe' => $is_dev ? $e->getMessage() : null], JSON_UNESCAPED_UNICODE);
 }
 
 /*
 Exemplo de curl:
-curl -i "http://monitor.aeonium.com.br.test/api/energia/resumo_dia.php?controlador_id=3&data=2026-06-05"
+curl -i -b "PHPSESSID=xxx" "http://monitor.aeonium.com.br.test/api/energia/resumo_dia.php?controlador_id=3"
 */
