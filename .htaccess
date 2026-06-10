@@ -1,41 +1,64 @@
-# Arquivo: .htaccess
-# Projeto: Controlador de Injeção de Potência Elétrica
-# Objetivo: Configuração mínima para diagnóstico de erro 500
-# Dependências: Apache 2.4+ com mod_rewrite
+# ============================================================
+# @arquivo       .htaccess
+# @versao        2.0.0
+# @modificado_em 2026-06-09
+# @objetivo      Hardening HTTP do doc_root: forca HTTPS, ativa HSTS
+#                (1 ano), bloqueia pastas sensiveis (config/, includes/,
+#                app/, storage/, docs/, .git/), bloqueia arquivos
+#                sensiveis (.env, *.sql, *.log), protege contra
+#                listagem de diretorios.
+# @autor         Fernando / CIP Cloud Copilot / ATGY
+# ============================================================
 
+# ──────────────────────────────────────────────────────────────
+# 1. FORÇA HTTPS (redirect 301 permanente)
+# ──────────────────────────────────────────────────────────────
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# ──────────────────────────────────────────────────────────────
+# 2. HSTS — HTTP Strict Transport Security (1 ano)
+# ──────────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ──────────────────────────────────────────────────────────────
+# 3. BLOQUEIA LISTAGEM DE DIRETÓRIOS
+# ──────────────────────────────────────────────────────────────
 Options -Indexes
+
+# ──────────────────────────────────────────────────────────────
+# 4. BLOQUEIA PASTAS SENSÍVEIS (acesso direto via HTTP)
+# ──────────────────────────────────────────────────────────────
+RewriteRule ^config/      - [F,L]
+RewriteRule ^includes/    - [F,L]
+RewriteRule ^app/         - [F,L]
+RewriteRule ^storage/     - [F,L]
+RewriteRule ^docs/        - [F,L]
+RewriteRule ^tools/       - [F,L]
+RewriteRule ^tests/       - [F,L]
+RewriteRule ^vendor/      - [F,L]
+RewriteRule ^\.git        - [F,L]
+RewriteRule ^\.github     - [F,L]
+
+# ──────────────────────────────────────────────────────────────
+# 5. BLOQUEIA ARQUIVOS SENSÍVEIS (qualquer pasta)
+# ──────────────────────────────────────────────────────────────
+<FilesMatch "(^\.env|^\.gitignore|^\.cpanel\.yml|^\.last_deploy|^composer\.(json|lock)|^package(-lock)?\.json|\.(sql|log|bak|swp|md|yml|yaml|ini|conf|sh)$)">
+    Require all denied
+</FilesMatch>
+
+# ──────────────────────────────────────────────────────────────
+# 6. DESABILITA SERVER SIGNATURE
+# ──────────────────────────────────────────────────────────────
 ServerSignature Off
 
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-</IfModule>
-php_flag display_errors on
-php_flag display_startup_errors on
-php_value error_reporting 32767
-php_flag log_errors on
-# BEGIN cPanel-generated php ini directives, do not edit
-<IfModule php8_module>
-   php_flag display_errors on
-   php_value max_execution_time 60
-   php_value max_input_time 60
-   php_value max_input_vars 1000
-   php_value memory_limit 512M
-   php_value post_max_size 516M
-   php_value session.gc_maxlifetime 7200
-   php_value session.save_path "/home1/aeoniu71/php/sessions_cipe"
-   php_value upload_max_filesize 512M
-   php_flag zlib.output_compression Off
-</IfModule>
-<IfModule lsapi_module>
-   php_flag display_errors on
-   php_value max_execution_time 60
-   php_value max_input_time 60
-   php_value max_input_vars 1000
-   php_value memory_limit 512M
-   php_value post_max_size 516M
-   php_value session.gc_maxlifetime 7200
-   php_value session.save_path "/home1/aeoniu71/php/sessions_cipe"
-   php_value upload_max_filesize 512M
-   php_flag zlib.output_compression Off
-</IfModule>
-# END cPanel-generated php ini directives, do not edit
+# ──────────────────────────────────────────────────────────────
+# 7. CHARSET PADRÃO
+# ──────────────────────────────────────────────────────────────
+AddDefaultCharset UTF-8
