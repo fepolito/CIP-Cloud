@@ -1,93 +1,72 @@
-﻿# ============================================================
-# CIP Cloud — .gitignore
-# ============================================================
+# ═══════════════════════════════════════════════════════════════
+# CIP Cloud — .htaccess raiz (segurança + roteamento)
+# ───────────────────────────────────────────────────────────────
+# @arquivo       .htaccess
+# @versao        2.0.0
+# @modificado_em 2026-06-09
+# @objetivo      Blindagem de arquivos sensíveis + headers de
+#                segurança para o doc_root público.
+# ═══════════════════════════════════════════════════════════════
 
-# Credenciais e configuração sensível
-/config/database.php
-/config/soliscloud.php
-/.env
-/.env.*
-!/.env.example
+# ── Charset e options ──
+AddDefaultCharset UTF-8
+Options -Indexes -ExecCGI
+ServerSignature Off
 
-# Logs
-*.log
-/logs/
-/storage/logs/
+# ── Bloqueio: metadados Git ──
+RedirectMatch 404 /\.git
+<DirectoryMatch "^\.git">
+    Require all denied
+</DirectoryMatch>
+<FilesMatch "^\.git">
+    Require all denied
+</FilesMatch>
 
-# Cache e temporários
-*.tmp
-*.bak
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
+# ── Bloqueio: arquivos de deploy / config ──
+<FilesMatch "^(\.cpanel\.yml|\.gitignore|\.gitattributes|\.env.*|composer\.(json|lock)|package(-lock)?\.json|README\.md|CHANGELOG\.md)$">
+    Require all denied
+</FilesMatch>
 
-# Editores e IDEs
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
+# ── Bloqueio: scripts DEV-only (caso vazem) ──
+<FilesMatch "\.(bat|ps1|sh|sql|bak|swp|tmp|log)$">
+    Require all denied
+</FilesMatch>
 
-# Dependências (caso futuramente use Composer/npm)
-/vendor/
-/node_modules/
-composer.phar
-package-lock.json
+# ── Bloqueio: auditorias e arquivos ad-hoc ──
+<FilesMatch "^_audit_">
+    Require all denied
+</FilesMatch>
 
-# Uploads de usuários (NÃO versionar)
-/public_html/uploads/
-/public_html/storage/uploads/
+# ── Bloqueio: pastas internas (defesa em profundidade) ──
+RedirectMatch 404 /(app|config|includes|storage|database|tools|tests|docs)(/.*)?$
 
-# Builds e dumps
-*.sql.gz
-*.zip
-*.tar.gz
-/backup/
-/dumps/
+# ── Headers de segurança ──
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    # HSTS (somente PROD com HTTPS confirmado)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
 
-# Sistema operacional
-desktop.ini
+# ── Compressão (performance) ──
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json
+</IfModule>
 
-# === Adicionado em 2026-06-05 (limpeza inicial) ===
-# Config de sync prod->teste (contem token sensivel)
-/config/sync.php
+# ── Cache de estáticos (performance) ──
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+</IfModule>
 
-# Config local do PHP (Laragon)
-php.ini
-
-# Config local do PHP por diretorio
-.user.ini
-
-# Backups locais (nao versionar)
-/_backups/
-
-
-# Logs de runtime (PHP error_log)
-error_log
-*.log
-
-# Estado runtime de ferramentas dev
-tools/sync_state.json
-
-# ==============================================
-# Credenciais e configs sensiveis adicionais
-# ==============================================
-/api/config/env.php
-
-# ==============================================
-# Storage runtime (sessions, locks, backups, cache)
-# ==============================================
-/storage/sessions/*
-!/storage/sessions/.htaccess
-/storage/backups/
-/storage/install.lock
-/storage/cache/
-/storage/logs/
-/storage/tmp/
-
-# ==============================================
-# Uploads (conteudo de cliente)
-# ==============================================
-/uploads/*
-!/uploads/.gitkeep
+# ── PHP: forçar UTF-8 e timezone (HostGator) ──
+<IfModule mod_php.c>
+    php_value default_charset "UTF-8"
+    php_value date.timezone "UTC"
+</IfModule>
