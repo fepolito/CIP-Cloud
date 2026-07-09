@@ -3,8 +3,8 @@ deployment:
   tasks:
     # ============================================================
     # @arquivo       .cpanel.yml
-    # @versao        1.0.0
-    # @modificado_em 2026-06-09
+    # @versao        1.0.1
+    # @modificado_em 2026-07-09
     # @objetivo      Script de deploy automatizado cPanel Git Version
     #                Control. Sincroniza repo CIP-Cloud (branch main)
     #                com doc_root do subdominio monitor.aeonium.com.br,
@@ -14,35 +14,9 @@ deployment:
     # ============================================================
 
     - export DEPLOYPATH=/home1/aeoniu71/monitor.aeonium.com.br/
-
-    - /bin/rsync -avzh --delete
-        --exclude='.git/'
-        --exclude='.gitignore'
-        --exclude='.cpanel.yml'
-        --exclude='.github/'
-        --exclude='README.md'
-        --exclude='docs/'
-        --exclude='tools/'
-        --exclude='tests/'
-        --exclude='node_modules/'
-        --exclude='vendor/'
-        --exclude='config/database.php'
-        --exclude='config/app.local.php'
-        --exclude='.env'
-        --exclude='.env.*'
-        --exclude='storage/'
-        --exclude='uploads/'
-        --exclude='*.log'
-        --exclude='*.sql'
-        --exclude='*.bak'
-        --exclude='.vscode/'
-        --exclude='.idea/'
-        ./ $DEPLOYPATH
-
+    - /bin/rsync -avzh --delete --exclude='.git/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='.github/' --exclude='README.md' --exclude='docs/' --exclude='tools/' --exclude='tests/' --exclude='node_modules/' --exclude='vendor/' --exclude='config/database.php' --exclude='config/app.local.php' --exclude='.env' --exclude='.env.*' --exclude='storage/' --exclude='uploads/' --exclude='*.log' --exclude='*.sql' --exclude='*.bak' --exclude='.vscode/' --exclude='.idea/' ./ $DEPLOYPATH
     - /bin/find $DEPLOYPATH -type d -exec chmod 755 {} \;
     - /bin/find $DEPLOYPATH -type f -exec chmod 644 {} \;
-
     - /bin/chmod 755 $DEPLOYPATH/storage 2>/dev/null || true
     - /bin/chmod 755 $DEPLOYPATH/uploads 2>/dev/null || true
-
     - /bin/date "+%Y-%m-%d %H:%M:%S UTC" > $DEPLOYPATH/.last_deploy

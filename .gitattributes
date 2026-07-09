@@ -1,4 +1,4 @@
-﻿# Forca LF em arquivos de codigo, independente do SO do dev
+# Forca LF em arquivos de codigo, independente do SO do dev
 *.php   text eol=lf
 *.js    text eol=lf
 *.css   text eol=lf
