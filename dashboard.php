@@ -1,10 +1,10 @@
 <?php
 /**
- * ============================================================
- * Arquivo   : dashboard.php
- * Projeto   : CIP — Controlador de Injeção de Potência Elétrica
- * Objetivo  : Dashboard de monitoramento de energia (KPIs + áreas
- *             reservadas para infográfico SVG e cards instantâneos)
+ * @arquivo       dashboard.php
+ * @versao        1.14.0
+ * @modificado_em 2026-07-09
+ * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
+ * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
  * Dependências de hardware:
  *   - Servidor com MySQL/MariaDB acessível via localhost:3306
@@ -71,6 +71,16 @@
  *                        animacao independente das setas (fix bug noturno
  *                        onde tudo congelava com geracao=null), degradacao
  *                        graciosa se payload sem energia_dia.
+ *   2026-07-09  v1.13.1  Fix animação: classes de estado inválidas (prefixo --) e
+ *                        ausência de regra CSS de fluxo ativo. Setas agora animam.
+ *   2026-07-09  v1.13.2  Fix stroke-dasharray para loop matemático perfeito no fluxo SVG.
+ *   2026-07-09  v1.13.3  Reduz fator de cálculo da velocidade da animação do fluxo no JS.
+ *   2026-07-09  v1.13.4  Ajuste do filtro SVG glow para userSpaceOnUse e simplificação 
+ *                        da animação reversa com animation-direction.
+ *   2026-07-09  v1.13.5  Reversão da animação da exportada para @keyframes explícito
+ *                        (fluxo-mover-exportada) com stroke-dashoffset 36.
+ *   2026-07-09  v1.13.6  Ajuste de sinal do stroke-dashoffset (para negativo) no
+ *                        fluxo exportado a pedido, alinhando com a orientação real do path.
  * ============================================================
  */
 
@@ -553,31 +563,30 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       fill: none;
       stroke-width: 4;
       stroke-linecap: round;
-      stroke-dasharray: 10 8;
+      stroke-dasharray: 12 6;
       stroke-dashoffset: 0;
-      animation: fluxo-mover var(--dur, 2.5s) linear infinite;
+      opacity: 0;
+      animation: none;
       filter: url(#glow);
-      opacity: 1;
     }
     .fluxo-ativo.verde   { stroke: var(--green);   }
     .fluxo-ativo.amarelo { stroke: var(--yellow);  }
     .fluxo-ativo.azul    { stroke: var(--blue);    }
     .fluxo-ativo.cinza   { stroke: var(--txt-dim); }
 
-    /* Quando o fluxo esta "morto" (sem potencia ou standby) */
-    .fluxo-grupo.inativo .fluxo-ativo,
-    .fluxo-grupo.seta--parada .fluxo-ativo {
-      opacity: 0;
-      animation: none;
+    .fluxo-grupo.fluxo-on .fluxo-ativo {
+      opacity: 1;
+      animation: fluxo-mover var(--dur, 1.25s) linear infinite;
     }
-    .fluxo-grupo.standby .fluxo-ativo,
-    .fluxo-grupo.--standby .fluxo-ativo,
-    .fluxo-grupo.seta--standby .fluxo-ativo {
+    .fluxo-grupo[data-fluxo="exportada"] .fluxo-ativo {
+      animation-name: fluxo-mover-exportada;
+    }
+    .fluxo-grupo.fluxo-standby .fluxo-ativo {
       opacity: .25;
-      animation-duration: 4s;
+      animation: fluxo-mover 2s linear infinite;
     }
 
-    .no-grupo.--sem-dado .no-caixa {
+    .no-grupo.sem-dado .no-caixa {
       stroke-dasharray: 4 4;
       opacity: .55;
     }
@@ -592,12 +601,10 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       to { stroke-dashoffset: -36; }
     }
 
-    /* Fluxo inverso (Imovel -> Rede): animacao no sentido oposto */
-    .fluxo-grupo[data-fluxo="exportada"] .fluxo-ativo {
-      animation-name: fluxo-mover-reverso;
-    }
-    @keyframes fluxo-mover-reverso {
-      to { stroke-dashoffset: 36; }
+    /* Exportada: sentido invertido (path desenhado rede->imovel) */
+    @keyframes fluxo-mover-exportada {
+      from { stroke-dashoffset: 0; }
+      to   { stroke-dashoffset: -36; }
     }
 
     /* ── Rodape ─────────────────────────────────── */
@@ -731,7 +738,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <!-- ===== DEFS: gradientes e filtros ===== -->
         <defs>
           <!-- Glow suave reutilizavel -->
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="1000" height="480">
             <feGaussianBlur stdDeviation="3" result="b"/>
             <feMerge>
               <feMergeNode in="b"/>
@@ -770,7 +777,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         </g>
 
         <!-- Fluxo 4: Imovel <-> Bateria (horizontal, direita) -->
-        <g class="fluxo-grupo standby" data-fluxo="bateria">
+        <g class="fluxo-grupo fluxo-standby" data-fluxo="bateria">
           <path class="fluxo-trilho"
                 d="M 600,335 C 680,335 740,335 800,335"/>
           <path class="fluxo-ativo cinza"
@@ -917,7 +924,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
 <footer class="footer">
   CIP — Controlador de Injeção de Potência Elétrica &nbsp;|&nbsp;
-  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.13.0
+  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.14.0
 </footer>
 
 <script>
@@ -1250,15 +1257,15 @@ verificarToken().then(ok => {
 
     function calcularEstadoSeta(potenciaW) {
       if (potenciaW === null || potenciaW === undefined) {
-        return { ativa: false, classe: 'seta--standby', velocidade: 0 };
+        return { ativa: false, classe: 'fluxo-standby', velocidade: 0 };
       }
       const p = Math.abs(potenciaW);
       if (p < LIMIAR_FLUXO_W) {
-        return { ativa: false, classe: 'seta--parada', velocidade: 0 };
+        return { ativa: false, classe: null, velocidade: 0 };
       }
-      // 100W -> 8s, 5000W -> 1.5s
-      const velocidade = Math.max(1.5, Math.min(8, 8 - (p / 5000) * 6.5));
-      return { ativa: true, classe: 'seta--ativa', velocidade };
+      // 100W -> 4s, 5000W -> 0.75s
+      const velocidade = Math.max(0.75, Math.min(4, 4 - (p / 5000) * 3.25));
+      return { ativa: true, classe: 'fluxo-on', velocidade };
     }
 
     /* ───────── Aplicacao do estado visual de UM fluxo ───────── */
@@ -1266,7 +1273,7 @@ verificarToken().then(ok => {
       if (!grupo) return;
       const estado = calcularEstadoSeta(watts);
       
-      grupo.classList.remove('inativo', 'standby', '--standby', 'seta--standby', 'seta--parada', 'seta--ativa');
+      grupo.classList.remove('fluxo-on', 'fluxo-standby');
       if (estado.classe) {
         grupo.classList.add(estado.classe);
       }
@@ -1353,9 +1360,9 @@ verificarToken().then(ok => {
       aplicarFluxo(refs.fluxoExportada, f.exportada_w);
 
       if (f.geracao_w === null || f.geracao_w === undefined) {
-        if (refs.geracao) refs.geracao.closest('.no-grupo').classList.add('--sem-dado');
+        if (refs.geracao) refs.geracao.closest('.no-grupo').classList.add('sem-dado');
       } else {
-        if (refs.geracao) refs.geracao.closest('.no-grupo').classList.remove('--sem-dado');
+        if (refs.geracao) refs.geracao.closest('.no-grupo').classList.remove('sem-dado');
       }
 
       // ── Qualidade (dots) ──
