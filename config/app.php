@@ -66,6 +66,11 @@ if (!defined('APP_BASE_PATH')) {
 define('SESSION_NAME', 'CIPESID');
 define('SESSION_LIFETIME', 7200);
 
+// Forca o diretorio de sessoes seguro em producao para evitar falhas do .user.ini
+if (APP_ENV === 'production') {
+    ini_set('session.save_path', '/home1/aeoniu71/php/sessions_cipe');
+}
+
 // Em DEV, sincroniza telemetria a cada 15 minutos (900s). Em PROD, a cada 60s.
 define('TELEMETRIA_CICLO_SEGUNDOS', is_ambiente_dev() ? 900 : 60);
 
