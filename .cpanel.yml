@@ -14,7 +14,7 @@ deployment:
     # ============================================================
 
     - export DEPLOYPATH=/home1/aeoniu71/monitor.aeonium.com.br/
-    - /bin/rsync -avzh --delete --exclude='.git/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='.github/' --exclude='README.md' --exclude='docs/' --exclude='tools/' --exclude='tests/' --exclude='node_modules/' --exclude='vendor/' --exclude='config/database.php' --exclude='config/app.local.php' --exclude='api/config/env.php' --exclude='.env' --exclude='.env.*' --exclude='.user.ini' --exclude='php.ini' --exclude='storage/' --exclude='uploads/' --exclude='*.log' --exclude='*.sql' --exclude='*.bak' --exclude='.vscode/' --exclude='.idea/' ./ $DEPLOYPATH
+    - /bin/rsync -avzh --delete --exclude='.git/' --exclude='.gitignore' --exclude='.cpanel.yml' --exclude='.github/' --exclude='README.md' --exclude='docs/' --exclude='tools/' --exclude='tests/' --exclude='node_modules/' --exclude='vendor/' --exclude='config/database.php' --exclude='config/app.local.php' --exclude='api/config/env.php' --exclude='config/sync.php' --exclude='.env' --exclude='.env.*' --exclude='.user.ini' --exclude='php.ini' --exclude='storage/' --exclude='uploads/' --exclude='*.log' --exclude='*.sql' --exclude='*.bak' --exclude='.vscode/' --exclude='.idea/' ./ $DEPLOYPATH
     - /bin/find $DEPLOYPATH -type d -exec chmod 755 {} \;
     - /bin/find $DEPLOYPATH -type f -exec chmod 644 {} \;
     - /bin/chmod 755 $DEPLOYPATH/storage 2>/dev/null || true
