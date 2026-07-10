@@ -1307,7 +1307,22 @@ function expandir288(labels, valores) {
       mapa[lbl] = parseFloat(parseFloat(v).toFixed(3));
     }
   });
-  return LABELS_288.map(h => (h in mapa ? mapa[h] : null));
+
+  // Determina até onde preencher com 0 (para não desenhar linha no futuro de hoje)
+  let maxValidLabel = "23:55";
+  if (typeof dataAtual !== 'undefined' && typeof dataHoje === 'function' && dataAtual === dataHoje()) {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    maxValidLabel = `${h}:${m}`;
+  }
+
+  return LABELS_288.map(h => {
+    if (h in mapa) return mapa[h];
+    // Se for gap no passado/presente, joga pra 0. Se for no futuro (hoje), deixa null.
+    if (h <= maxValidLabel) return 0;
+    return null;
+  });
 }
 
 
