@@ -90,7 +90,8 @@ try {
             t.status_inversor,
             t.temperatura_inversor_c,
             t.limite_exportacao_ativo_w,
-            t.firmware_versao
+            t.firmware_versao,
+            t.inversor_read_errors
         FROM telemetria_5min t
         INNER JOIN controladores c ON c.id = t.controlador_id
         WHERE t.controlador_id = :ctrl_id
@@ -120,6 +121,10 @@ try {
                     'status' => 'standby',
                     'potencia_w' => null
                 ]
+            ],
+            'status' => [
+                'controlador' => ['online' => false, 'idade_seg' => null, 'label' => 'OFFLINE'],
+                'inversor' => ['online' => false, 'status_raw' => null, 'read_errors' => null, 'label' => 'OFFLINE']
             ]
         ];
         echo json_encode($vazio, JSON_UNESCAPED_UNICODE);
@@ -219,11 +224,37 @@ try {
 
     $tsUtc = $row['timestamp_utc'] ? (new DateTimeImmutable($row['timestamp_utc'], new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z') : null;
 
+    $idade_seg = isset($row['idade_segundos']) ? (int) $row['idade_segundos'] : null;
+
+    if ($idade_seg === null && !empty($row['timestamp_utc'])) {
+        // Fallback caso CONVERT_TZ no MySQL retorne NULL no Windows
+        $ts_db = new DateTimeImmutable($row['timestamp_utc'], new DateTimeZone('UTC'));
+        $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $idade_seg = $now->getTimestamp() - $ts_db->getTimestamp();
+    }
+
+    $controlador_online = ($idade_seg !== null && $idade_seg <= 900);
+    $st_inv = strtolower(trim((string)($row['status_inversor'] ?? '')));
+    $inversor_online = ($st_inv !== '' && !in_array($st_inv, ['offline', 'erro', 'falha', 'desconectado'], true));
+
     $response = [
         'success' => true,
         'timestamp_utc'   => $tsUtc,
         'timestamp_local' => $row['timestamp_local'],
-        'idade_segundos'  => $toI($row['idade_segundos']),
+        'idade_segundos'  => $idade_seg,
+        'status' => [
+            'controlador' => [
+                'online'      => $controlador_online,
+                'idade_seg'   => $idade_seg,
+                'label'       => $controlador_online ? 'ONLINE' : 'OFFLINE',
+            ],
+            'inversor' => [
+                'online'      => $inversor_online,
+                'status_raw'  => $row['status_inversor'] ?? null,
+                'read_errors' => isset($row['inversor_read_errors']) ? (int)$row['inversor_read_errors'] : null,
+                'label'       => $inversor_online ? 'ONLINE' : 'OFFLINE',
+            ],
+        ],
         'fluxo' => [
             'geracao_w'       => $toF($row['potencia_geracao_w']),
             'importada_w'     => $toF($row['potencia_importada_w']),

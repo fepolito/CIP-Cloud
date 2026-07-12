@@ -690,7 +690,9 @@ $appIsAdmin = in_array($_SESSION['usuario_perfil'] ?? '', [
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════ CHART CARD -->
+
+
+  <!-- 📈 CHART CARD -->
   <div class="ccard">
     <div class="ccard-head">
       <div class="ccard-title">
@@ -790,7 +792,7 @@ $appIsAdmin = in_array($_SESSION['usuario_perfil'] ?? '', [
  * Projeto   : CIP - Controlador de Injecao de Potencia Eletrica
  * Arquivo   : public_html/energia.php [bloco JS]
  * Objetivo  : Orquestrador multimode DIA|MES|ANO|TOTAL
- *             v2.3: modo DIA usa 4 linhas continuas; navegacao preservada.
+ *             v2.6: Remove gauge instantâneo (migrado p/ dashboard.php).
  * =============================================================================
  */
 
@@ -803,6 +805,7 @@ const API = {
   mes : '/api/energia/mes.php',
   ano : '/api/energia/ano.php',
   anos: '/api/energia/anos.php',
+  inst: '/api/energia/instantaneo.php'
 };
 const COR_IMP  = '#ff5252';
 const COR_EXP  = '#00e676';
@@ -836,10 +839,13 @@ const NOMES_MESES = ['Jan','Fev','Mar','Abr','Mai','Jun',
 ════════════════════════════════════════ */
 let chart     = null;
 let modoAtual = 'dia';
+let resumoDia = {};
 let dataAtual = dataHoje();
 let mesAtual  = dataHoje().substring(0, 7);
 let anoAtual  = new Date().getFullYear();
 let anosDisp  = [];
+
+
 
 // Flag: true quando o carregamento vier do auto-refresh.
 // Lida por buildChartOptions() para desabilitar animações durante refresh silencioso.
@@ -1601,6 +1607,8 @@ async function carregarDia() {
       console.error('[carregarDia] API retornou sucesso=false:', json.erro);
       throw new Error(json.erro ?? 'Erro desconhecido da API');
     }
+    
+    resumoDia = json.resumo ?? {};
 
     /* ── 3. Aviso de sem dados ─────────────────────────────────────────── */
     const semDados = document.getElementById('sem-dados-msg');
@@ -1962,6 +1970,7 @@ const AutoRefresh = (function() {
     document.getElementById('loading').style.display = 'none';
     AutoRefresh.reavaliar();
   });
+
 })();
 </script>
 </body>

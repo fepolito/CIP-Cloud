@@ -26,19 +26,3 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../app/auth.php';
-
-/**
- * Encerra a execução com 401 se o usuário não estiver autenticado.
- * Não emite saída se a sessão for válida.
- 
-function requireAuth(): void
-{
-    if (!isAuthenticated()) {
-        if (!headers_sent()) {
-            header('Content-Type: application/json; charset=utf-8');
-        }
-        http_response_code(401);
-        echo json_encode(['sucesso' => false, 'erro' => 'Sessão inválida ou expirada']);
-        exit;
-    }
-}*/

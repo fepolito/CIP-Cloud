@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.14.0
- * @modificado_em 2026-07-09
+ * @versao        1.14.1
+ * @modificado_em 2026-07-12
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
@@ -81,6 +81,11 @@
  *                        (fluxo-mover-exportada) com stroke-dashoffset 36.
  *   2026-07-09  v1.13.6  Ajuste de sinal do stroke-dashoffset (para negativo) no
  *                        fluxo exportado a pedido, alinhando com a orientação real do path.
+ *   2026-07-12  v1.14.1  [FIX] Remoção do card solto de Frequência (#kFreq)
+ *                        redundante — dado já exibido no rodapé do
+ *                        infográfico (#infoFreq). Removido HTML .kpi-grid
+ *                        órfão + binding JS em carregarKpis(). CSS .kpi*
+ *                        mantido (compartilhado com KPIs de status).
  * ============================================================
  */
 
@@ -917,15 +922,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     </div>
   </div>
 
-  <!-- KPIs principais -->
-  <div class="kpi-grid">
-    <div class="kpi" style="--kc:var(--yellow)">
-      <div class="kpi-lbl">Frequência</div>
-      <div class="kpi-val" id="kFreq">—<span class="unit">Hz</span></div>
-      <div class="kpi-sub">Nominal: 60 Hz</div>
-      <div class="kpi-icon">〰️</div>
-    </div>
-  </div>
+
 
   <!-- KPIs status do controlador -->
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
@@ -961,7 +958,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
 <footer class="footer">
   CIP — Controlador de Injeção de Potência Elétrica &nbsp;|&nbsp;
-  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.14.0
+  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.14.1
 </footer>
 
 <script>
@@ -1101,9 +1098,7 @@ async function carregarKpis() {
 
     const { atual, totais, controlador, custo_dia } = json;
 
-    if (atual?.frequencia_hz !== undefined) {
-      document.getElementById('kFreq').innerHTML = `${(+atual.frequencia_hz).toFixed(2)}<span class="unit">Hz</span>`;
-    }
+
 
     if (controlador) {
       const nomeCtrl = controlador.nome || `Controlador #${CTRL_ID}`;

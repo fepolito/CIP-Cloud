@@ -34,6 +34,8 @@
 //                       - Nota de roadmap: integracao futura com API ANEEL
 //                       - Autenticacao via isAuthenticated() (sessao PHP)
 //                       - Filtro por periodo: 1h / 6h / 24h / 7d
+//   2026-07-12  v1.1.0  [FIX DEB-06] ultimo_ping em ISO-8601 UTC ('Z')
+//                       para cálculo correto de idade no browser.
 // ============================================================
 
 declare(strict_types=1);
@@ -249,14 +251,21 @@ $stmt = $pdo->prepare($sql_ctrl);
 $stmt->execute([':cid' => $controlador_id]);
 $controlador = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Monta campo ultimo_ping unificado para o dashboard
+// ── Monta campo ultimo_ping unificado (ISO-8601 UTC explícito) ──
+// Fix DEB-06: timestamps do banco são UTC (sem marcador). Anexar 'Z'
+// para que new Date()/Date.parse() no browser NÃO interprete como
+// horário local (causava idade negativa → semáforo mentiroso).
 // Prioridade: last_telemetry_at > ultimo_contato > last_seen_at
 if ($controlador) {
-    $controlador['ultimo_ping'] =
+    $pingRaw =
         $controlador['last_telemetry_at']
         ?? $controlador['ultimo_contato']
         ?? $controlador['last_seen_at']
         ?? null;
+
+    $controlador['ultimo_ping'] = $pingRaw
+        ? str_replace(' ', 'T', $pingRaw) . 'Z'
+        : null;
 }
 
 // ─────────────────────────────────────────────────────────────

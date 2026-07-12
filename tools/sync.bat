@@ -21,5 +21,5 @@ if not exist "%PHP_BIN%" (
 
 "%PHP_BIN%" sync_puxar.php %*
 
-echo.
-pause
+Rem echo.
+rem pause
