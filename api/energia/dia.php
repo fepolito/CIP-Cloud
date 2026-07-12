@@ -93,7 +93,7 @@ try {
             ROUND(AVG(potencia_importada_w)     / 1000, 3) AS importada,
             ROUND(AVG(potencia_exportada_w)     / 1000, 3) AS exportada,
             ROUND(AVG(potencia_geracao_w)       / 1000, 3) AS compensacao,
-            ROUND(AVG(potencia_consumo_total_w) / 1000, 3) AS consumo_total
+            ROUND(AVG(COALESCE(potencia_importada_w, 0) + COALESCE(potencia_geracao_w, 0) - COALESCE(potencia_exportada_w, 0)) / 1000, 3) AS consumo_total
 
           FROM telemetria_5min
          WHERE controlador_id = :id

@@ -80,7 +80,7 @@ try {
             SUM(potencia_importada_w   * (5.0/60.0)) / 1000                  AS importada_kwh,
             SUM(potencia_exportada_w   * (5.0/60.0)) / 1000                  AS exportada_kwh,
             SUM(potencia_geracao_w     *   (5.0/60.0)) / 1000                AS geracao_kwh,
-            SUM(potencia_consumo_total_w * (5.0/60.0)) / 1000                AS consumo_kwh
+            SUM((COALESCE(potencia_importada_w, 0) + COALESCE(potencia_geracao_w, 0) - COALESCE(potencia_exportada_w, 0)) * (5.0/60.0)) / 1000                AS consumo_kwh
         FROM telemetria_5min
         WHERE
             controlador_id = :controlador_id

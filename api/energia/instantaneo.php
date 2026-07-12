@@ -2,8 +2,8 @@
 // ============================================================
 // Projeto      : CIP - Controlador de Injecao de Potencia Eletrica
 // Arquivo      : api/energia/instantaneo.php
-// Versao       : v1.0.1
-// Data         : 2026-06-07
+// Versao       : v1.1.0
+// Data         : 2026-07-11
 // Objetivo     : Retornar a ultima leitura disponivel da telemetria_5min de um controlador para o dashboard
 // Dependencias : config/app.php, config/database.php, app/auth.php, app/helpers/Tenant.php
 // Tabelas      : controladores, telemetria_5min
@@ -13,6 +13,7 @@
 //   2026-06-07  v1.0.0  Criacao inicial
 //   2026-06-07  v1.0.1  Blindar SERVER_NAME contra ausencia, preservar NULL 
 //                        em is_exporting (estado desconhecido vs nao-exportando)
+//   2026-07-11  v1.1.0  Popula potencia_pico_90d_kw on-the-fly (escala gauge, ultimos 90d)
 // ============================================================
 // NOTA TECNICA:
 //   A coluna potencia_ativa_total_w (medida direta EA777) NAO eh exposta
@@ -138,6 +139,15 @@ try {
     $toRound = fn($val, $prec) => $val !== null ? round((float)$val, $prec) : null;
     $toBool = fn($val) => $val !== null ? (bool)$val : false;
     
+    $sqlPico = "SELECT MAX(GREATEST(COALESCE(potencia_geracao_w, 0), COALESCE(potencia_exportada_w, 0), COALESCE(potencia_importada_w, 0))) AS max_pico 
+                  FROM telemetria_5min 
+                 WHERE controlador_id = :cid 
+                   AND timestamp_utc >= UTC_TIMESTAMP() - INTERVAL 90 DAY";
+    $stmtPico = $pdo->prepare($sqlPico);
+    $stmtPico->execute([':cid' => $controladorId]);
+    $picoRow = $stmtPico->fetch(PDO::FETCH_ASSOC);
+    $pico90dW = $picoRow ? (float)$picoRow['max_pico'] : 0;
+    
     $resposta = [
         'sucesso' => true,
         'controlador_id' => (int)$controlador['id'],
@@ -151,7 +161,11 @@ try {
             'geracao'   => $toKw($leitura['potencia_geracao_w']),
             'exportada' => $toKw($leitura['potencia_exportada_w']),
             'importada' => $toKw($leitura['potencia_importada_w']),
-            'consumo'   => $toKw($leitura['potencia_consumo_total_w'])
+            'consumo'   => $toKw(
+                ($leitura['potencia_importada_w'] ?? 0) + 
+                ($leitura['potencia_geracao_w'] ?? 0) - 
+                ($leitura['potencia_exportada_w'] ?? 0)
+            )
         ],
         'rede' => [
             'tensao_v'      => $toFloat($leitura['tensao_rede_v']),
@@ -182,7 +196,7 @@ try {
         ],
         'limites_card' => [
             'potencia_nominal_kw'  => $toFloat($controlador['potencia_nominal_kw']),
-            'potencia_pico_90d_kw' => $toFloat($controlador['potencia_pico_90d_kw'])
+            'potencia_pico_90d_kw' => $pico90dW > 0 ? round($pico90dW/1000, 3) : null
         ]
     ];
     
