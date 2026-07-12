@@ -665,6 +665,34 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       .kpi-lbl  { font-size: 9px; }
       .kpi-icon { font-size: 20px; }
     }
+
+    /* ── SEMAFORO DE SAUDE (Fase 2) ── */
+    .semaforo {
+      display: flex; align-items: center; gap: 18px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 24px;
+      margin: 20px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .semaforo-luz {
+      width: 24px; height: 24px; border-radius: 50%;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+      transition: all 0.4s ease;
+      flex-shrink: 0;
+    }
+    .semaforo-luz.cinza    { background: #555; }
+    .semaforo-luz.verde    { background: var(--green);  box-shadow: 0 0 12px var(--green), inset 0 2px 4px rgba(0,0,0,0.3); }
+    .semaforo-luz.amarelo  { background: var(--yellow); box-shadow: 0 0 12px var(--yellow), inset 0 2px 4px rgba(0,0,0,0.3); }
+    .semaforo-luz.vermelho { background: var(--red);    box-shadow: 0 0 12px var(--red), inset 0 2px 4px rgba(0,0,0,0.3); }
+    .semaforo-info {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .semaforo-info strong {
+      font-size: 1.1rem; color: var(--txt); letter-spacing: -0.01em;
+    }
+    .semaforo-info span {
+      font-size: 0.9rem; color: var(--txt-dim); line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -701,6 +729,15 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       <?php endif; ?>
     </div>
     <span class="refresh-info" id="refreshInfo">⏱ —</span>
+  </div>
+
+  <!-- ── SEMÁFORO DE SAÚDE DA INSTALAÇÃO ── -->
+  <div class="semaforo" id="semaforo" style="display: none;">
+    <div class="semaforo-luz cinza" id="semLuz"></div>
+    <div class="semaforo-info">
+      <strong id="semTitulo">⚪ Verificando status...</strong>
+      <span id="semSub">Aguardando dados da usina...</span>
+    </div>
   </div>
 
   <!-- ════════════════════════════════════════════════════════
@@ -1003,6 +1040,48 @@ async function logout() {
   }
 }
 
+const SEM = { STALE_S: 1200, OFFLINE_S: 2400 };
+
+window.aplicarSemaforo = function(controlador, r, im, g, inv) {
+  const el = document.getElementById('semaforo');
+  if (!el) return;
+  el.style.display = 'flex';
+
+  const luz = document.getElementById('semLuz');
+  const titulo = document.getElementById('semTitulo');
+  const sub = document.getElementById('semSub');
+
+  const idade = controlador.ultimo_ping
+    ? (Date.now() - new Date(controlador.ultimo_ping).getTime()) / 1000 : 99999;
+  
+  const kwGeracao = parseFloat(g?.kw || g?.w || 0);
+  const invStatus = inv?.status || 'offline';
+
+  let estado = 'cinza', icone = '⚪', tituloTxt = '', subTxt = '';
+
+  if (idade >= SEM.OFFLINE_S) {
+    estado = 'vermelho'; icone = '🔴';
+    tituloTxt = 'Sem comunicação';
+    subTxt = `Usina offline há mais de ${Math.floor(idade/60)} minutos. Verifique a internet no local.`;
+  } else if (idade >= SEM.STALE_S) {
+    estado = 'amarelo'; icone = '🟡';
+    tituloTxt = 'Comunicação atrasada';
+    subTxt = `Último dado recebido há ${Math.floor(idade/60)} min. Atraso na transmissão.`;
+  } else if (kwGeracao <= 0 && invStatus !== 'online') {
+    estado = 'amarelo'; icone = '🌙';
+    tituloTxt = 'Usina em repouso';
+    subTxt = `Online, mas sem geração no momento (noite ou baixa luz).`;
+  } else {
+    estado = 'verde'; icone = '🟢';
+    tituloTxt = 'Tudo funcionando';
+    subTxt = `Usina online e ativa – dado de ${Math.floor(idade/60)} min atrás.`;
+  }
+
+  luz.className = `semaforo-luz ${estado}`;
+  titulo.textContent = `${icone} ${tituloTxt}`;
+  sub.textContent = subTxt;
+};
+
 /**
  * carregarKpis() — versao simplificada do antigo carregar()
  * Mantem o consumo de /api/dashboard/dados.php (legado) mas
@@ -1039,9 +1118,13 @@ async function carregarKpis() {
 
       const diff     = controlador.ultimo_ping
         ? (Date.now() - new Date(controlador.ultimo_ping).getTime()) / 1000 : 999;
-      const isOnline = diff <= 30;
+      const isOnline = diff < SEM.OFFLINE_S;
       document.getElementById('statusPill').className  = `kpi-status-pill ${isOnline ? 'online' : 'offline'}`;
       document.getElementById('statusTxt').textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+
+      if (typeof window.aplicarSemaforo === 'function') {
+        window.aplicarSemaforo(controlador, atual?.rede, atual?.imovel, atual?.geracao, atual?.inversor);
+      }
     }
 
     document.getElementById('refreshInfo').textContent =
@@ -1076,15 +1159,21 @@ if (window.CipTema && typeof window.CipTema.atual === 'function') {
 }
 
 // ── Boot ──────────────────────────────────────────────────────
-verificarToken().then(ok => {
-  if (!ok) return;
-  if (!CTRL_ID) {
-    document.getElementById('loading').style.display = 'none';
-    return;
-  }
-  carregarKpis();
-  startKpiTimer();
-});
+verificarToken()
+  .then(ok => {
+    if (!ok) return;
+    if (!CTRL_ID) {
+      document.getElementById('loading').style.display = 'none';
+      return;
+    }
+    carregarKpis();
+    startKpiTimer();
+  })
+  .catch(err => {
+    console.error('[CIP] Falha na verificação de sessão:', err);
+    const l = document.getElementById('loading');
+    if (l) l.innerHTML = '<p>Erro ao verificar sessão. <a href="/login.php">Recarregar</a></p>';
+  });
 </script>
 
   <script>
