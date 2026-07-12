@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.14.1
+ * @versao        1.14.2
  * @modificado_em 2026-07-12
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -86,6 +86,10 @@
  *                        infográfico (#infoFreq). Removido HTML .kpi-grid
  *                        órfão + binding JS em carregarKpis(). CSS .kpi*
  *                        mantido (compartilhado com KPIs de status).
+ *   2026-07-12  v1.14.2  [FIX] Badge de status honesto: pill nasce em
+ *                        estado neutro 'verificando' (cinza pulsante) em
+ *                        vez de 'online' verde falso. Evita estado inicial
+ *                        mentiroso entre load e primeiro fetch de KPIs.
  * ============================================================
  */
 
@@ -381,6 +385,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     }
     .kpi-status-pill.online  { background: rgba(0,230,118,.12); color: var(--green); }
     .kpi-status-pill.offline { background: rgba(255,82,82,.12);  color: var(--red);  }
+    .kpi-status-pill.verificando  { background: rgba(122,156,196,.12); color: var(--txt-mid); }
 
     .pill-dot {
       width: 8px; height: 8px;
@@ -389,6 +394,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     }
     .online  .pill-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
     .offline .pill-dot { background: var(--red); }
+    .verificando .pill-dot { background: var(--txt-mid); animation: pulse-dot 1.2s ease-in-out infinite; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: .35; }
+    }
 
     /* ══════════════════════════════════════════════
        AREAS RESERVADAS (B2.2 + B2.3)
@@ -928,7 +939,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
     <div class="kpi" style="--kc:var(--green)">
       <div class="kpi-lbl">Status do Controlador</div>
-      <div id="statusPill" class="kpi-status-pill online">
+      <div id="statusPill" class="kpi-status-pill verificando">
         <div class="pill-dot"></div>
         <span id="statusTxt">VERIFICANDO</span>
       </div>
@@ -958,7 +969,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
 <footer class="footer">
   CIP — Controlador de Injeção de Potência Elétrica &nbsp;|&nbsp;
-  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.14.1
+  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.14.2
 </footer>
 
 <script>
