@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.14.2
- * @modificado_em 2026-07-12
+ * @versao        1.15.0
+ * @modificado_em 2026-07-15
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
@@ -90,6 +90,8 @@
  *                        estado neutro 'verificando' (cinza pulsante) em
  *                        vez de 'online' verde falso. Evita estado inicial
  *                        mentiroso entre load e primeiro fetch de KPIs.
+ *   2026-07-15  v1.15.0  Infografico -> background fixo; cards 2x2 (resumo_dia.php);
+ *                        fix semaforo (fluxo via resumo_dia, idade via dados.php) [CIP-DEC-20260715-001]
  * ============================================================
  */
 
@@ -423,6 +425,62 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     /* ══════════════════════════════════════════════
        INFOGRAFICO DE FLUXO ENERGETICO (B2.2 v1.11.0)
     ══════════════════════════════════════════════ */
+
+
+    /* ===== Infográfico como background decorativo ===== */
+    #infografico-host {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.15;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    #infografico-host svg { width: 100%; height: 100%; }
+
+    .fluxo-wrapper { position: relative; min-height: 320px; padding: 16px; }
+
+    /* ===== Cards 2x2 ===== */
+    #cards-host {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      position: relative;
+      z-index: 1;
+    }
+    @media (max-width: 480px) {
+      #cards-host { grid-template-columns: 1fr; }
+    }
+
+    .card-energia {
+      background: var(--card-bg, rgba(20,24,33,0.72));
+      backdrop-filter: blur(4px);
+      border: 1px solid var(--card-border, rgba(255,255,255,0.08));
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+    .card-energia .ce-topo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: .82rem; color: var(--muted, #9aa4b2);
+    }
+    .card-energia .ce-valor {
+      font-size: 1.5rem; font-weight: 700; margin: 4px 0 10px;
+      color: var(--fg, #eef2f7);
+    }
+    .card-energia .ce-valor small { font-size: .8rem; font-weight: 500; color: var(--muted,#9aa4b2); }
+
+    .ce-bar-track {
+      height: 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.08); overflow: hidden;
+    }
+    .ce-bar-fill {
+      height: 100%; border-radius: 999px;
+      width: 0%; transition: width .6s ease;
+    }
+    .ce-geracao   .ce-bar-fill { background: linear-gradient(90deg,#ffb020,#ffd466); }
+    .ce-consumo   .ce-bar-fill { background: linear-gradient(90deg,#4a90e2,#6fb0ff); }
+    .ce-injetada  .ce-bar-fill { background: linear-gradient(90deg,#2ecc71,#6ff0a5); }
+    .ce-importada .ce-bar-fill { background: linear-gradient(90deg,#e05555,#ff8585); }
 
     .infografico-wrap {
       background: var(--card);
@@ -764,6 +822,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
        Valores e velocidades sao atualizados via JS (Parte 3/3),
        consumindo api/dashboard/infografico.php.
   ════════════════════════════════════════════════════════ -->
+  <div class="fluxo-wrapper">
   <div id="infografico-host" class="infografico-wrap">
 
     <!-- Cabecalho do bloco -->
@@ -846,13 +905,9 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa" x="0" y="0" width="160" height="120" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">☀️</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">MODULOS FV</text>
-          <text x="80" y="86" text-anchor="middle">
-             <tspan id="valGeracaoDia" class="valor-energia verde">— kWh</tspan>
-          </text>
-          <text x="80" y="104" text-anchor="middle">
-             <tspan id="valGeracao" class="valor-potencia verde">— kW</tspan>
-          </text>
-          <text class="no-sub" x="80" y="116" text-anchor="middle" id="valGeracaoOrigem">aguardando</text>
+          
+          
+          
         </g>
 
         <!-- No: REDE / CONCESSIONARIA -->
@@ -862,22 +917,14 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <text class="no-titulo" x="80" y="58" text-anchor="middle">REDE</text>
 
           <!-- Linha importada (amarelo) -->
-          <text class="no-mini-lbl amarelo" x="80" y="80" text-anchor="middle">▼ IMPORTADA</text>
-          <text x="80" y="100" text-anchor="middle">
-             <tspan id="valImportadaDia" class="valor-energia amarelo">— kWh</tspan>
-          </text>
-          <text x="80" y="118" text-anchor="middle">
-             <tspan id="valImportada" class="valor-potencia amarelo">— kW</tspan>
-          </text>
+          
+          
+          
 
           <!-- Linha exportada (azul) -->
-          <text class="no-mini-lbl azul" x="80" y="140" text-anchor="middle">▲ EXPORTADA</text>
-          <text x="80" y="160" text-anchor="middle">
-             <tspan id="valExportadaDia" class="valor-energia azul">— kWh</tspan>
-          </text>
-          <text x="80" y="178" text-anchor="middle">
-             <tspan id="valExportada" class="valor-potencia azul">— kW</tspan>
-          </text>
+          
+          
+          
         </g>
 
         <!-- No: IMOVEL (central) -->
@@ -886,16 +933,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <text class="no-emoji"  x="100" y="42" text-anchor="middle">🏠</text>
           <text class="no-titulo" x="100" y="66" text-anchor="middle">IMOVEL</text>
 
-          <text class="no-mini-lbl" x="100" y="90" text-anchor="middle">CONSUMO</text>
-          <text x="100" y="112" text-anchor="middle">
-             <tspan id="valConsumoDia" class="valor-energia">— kWh</tspan>
-          </text>
-          <text x="100" y="132" text-anchor="middle">
-             <tspan id="valConsumo" class="valor-potencia">— kW</tspan>
-          </text>
+          
+          
+          
 
-          <text class="no-mini-lbl" x="100" y="156" text-anchor="middle">SALDO REDE</text>
-          <text class="no-valor sm" id="valSaldo" x="100" y="174" text-anchor="middle">— kW</text>
+          
+          
         </g>
 
         <!-- No: BATERIA (standby) -->
@@ -903,14 +946,10 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa" x="0" y="0" width="160" height="150" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">🔋</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">BATERIA</text>
-          <text x="80" y="86" text-anchor="middle">
-             <tspan id="valBateriaDia" class="valor-energia cinza">— kWh</tspan>
-          </text>
-          <text x="80" y="104" text-anchor="middle">
-             <tspan id="valBateria" class="valor-potencia cinza">STANDBY</tspan>
-          </text>
-          <text class="no-sub" x="80" y="124" text-anchor="middle">battery-ready</text>
-          <text class="no-sub" x="80" y="138" text-anchor="middle">(em breve)</text>
+          
+          
+          
+          
         </g>
 
       </svg>
@@ -931,8 +970,29 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         </span>
       </div>
     </div>
+  <div id="cards-host">
+    <div class="card-energia ce-geracao">
+      <div class="ce-topo">☀️ <span>Geração</span></div>
+      <div class="ce-valor" id="ce-val-geracao">— <small>kWh</small></div>
+      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-geracao"></div></div>
+    </div>
+    <div class="card-energia ce-consumo">
+      <div class="ce-topo">🏠 <span>Consumo</span></div>
+      <div class="ce-valor" id="ce-val-consumo">— <small>kWh</small></div>
+      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-consumo"></div></div>
+    </div>
+    <div class="card-energia ce-injetada">
+      <div class="ce-topo">⬆️ <span>Injetada</span></div>
+      <div class="ce-valor" id="ce-val-injetada">— <small>kWh</small></div>
+      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-injetada"></div></div>
+    </div>
+    <div class="card-energia ce-importada">
+      <div class="ce-topo">⬇️ <span>Importada</span></div>
+      <div class="ce-valor" id="ce-val-importada">— <small>kWh</small></div>
+      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-importada"></div></div>
+    </div>
   </div>
-
+</div><!-- /fluxo-wrapper -->
 
 
   <!-- KPIs status do controlador -->
@@ -958,18 +1018,13 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     </div>
   </div>
 
-  <!-- ════════════════════════════════════════════════════════
-       AREA RESERVADA — 4 CARDS INSTANTANEOS (B2.3)
-       Substituira os antigos graficos PDE com cartoes de
-       leitura instantanea. Sera populada no Patch B2.3.
-  ════════════════════════════════════════════════════════ -->
-  <div id="cards-host"></div>
+
 
 </div><!-- /wrap -->
 
 <footer class="footer">
   CIP — Controlador de Injeção de Potência Elétrica &nbsp;|&nbsp;
-  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.14.2
+  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.15.0
 </footer>
 
 <script>
@@ -1050,48 +1105,75 @@ async function logout() {
 
 const SEM = { STALE_S: 1200, OFFLINE_S: 2400 };
 
-window.aplicarSemaforo = function(controlador, r, im, g, inv) {
-  const el = document.getElementById('semaforo');
-  if (!el) return;
-  el.style.display = 'flex';
+const OFFLINE_S = 900;   // 15 min sem ping = vermelho
+const STALE_S   = 300;   // 5 min = amarelo
+
+let _ultimoResumoDia = null;
+function aplicarSemaforoFluxo(resumo) { _ultimoResumoDia = resumo; renderSemaforo(); }
+
+function renderSemaforo() {
+  const pingIso = window._dadosControlador?.ultimo_ping;
+  const idade = pingIso ? (Date.now() - new Date(pingIso).getTime()) / 1000 : Infinity;
+
+  const r = _ultimoResumoDia || {};
+  const picG = r.potencia_pico_dia_kw?.geracao   ?? 0;
+  const picE = r.potencia_pico_dia_kw?.exportada ?? 0;
+  const geraKwh = r.energia_kwh?.geracao ?? 0;
+  const invConn = r.inversor?.conectado === true;
+  const houveFluxo = picG > 0.03 || picE > 0.03 || geraKwh > 0.01 || invConn;
+
+  let icone, tituloTxt, classe;
+  if (idade >= OFFLINE_S)      { icone='🔴'; tituloTxt='Sem comunicação'; classe='sem-off'; }
+  else if (idade >= STALE_S)   { icone='🟡'; tituloTxt='Dados atrasados'; classe='sem-stale'; }
+  else if (!houveFluxo)        { icone='🌙'; tituloTxt='Usina em repouso'; classe='sem-idle'; }
+  else                         { icone='🟢'; tituloTxt='Usina ativa';      classe='sem-on'; }
 
   const luz = document.getElementById('semLuz');
   const titulo = document.getElementById('semTitulo');
   const sub = document.getElementById('semSub');
 
-  const idade = controlador.ultimo_ping
-    ? (Date.now() - new Date(controlador.ultimo_ping).getTime()) / 1000 : 99999;
-  
-  const kwGeracao = parseFloat(g?.kw || g?.w || 0);
-  const invStatus = inv?.status || 'offline';
-
-  let estado = 'cinza', icone = '⚪', tituloTxt = '', subTxt = '';
-
-  if (idade >= SEM.OFFLINE_S) {
-    estado = 'vermelho'; icone = '🔴';
-    tituloTxt = 'Sem comunicação';
-    subTxt = `Usina offline há mais de ${Math.floor(idade/60)} minutos. Verifique a internet no local.`;
-  } else if (idade >= SEM.STALE_S) {
-    estado = 'amarelo'; icone = '🟡';
-    tituloTxt = 'Comunicação atrasada';
-    subTxt = `Último dado recebido há ${Math.floor(idade/60)} min. Atraso na transmissão.`;
-  } else if (kwGeracao <= 0 && invStatus !== 'online') {
-    estado = 'amarelo'; icone = '🌙';
-    tituloTxt = 'Usina em repouso';
-    subTxt = `Online, mas sem geração no momento (noite ou baixa luz).`;
-  } else {
-    estado = 'verde'; icone = '🟢';
-    tituloTxt = 'Tudo funcionando';
-    subTxt = `Usina online e ativa – dado de ${Math.floor(idade/60)} min atrás.`;
+  if (luz) luz.className = `semaforo-luz ${classe}`;
+  if (titulo) titulo.textContent = `${icone} ${tituloTxt}`;
+  if (sub) {
+    if (idade >= OFFLINE_S) sub.textContent = `Offline há mais de ${Math.floor(idade/60)} min`;
+    else if (idade >= STALE_S) sub.textContent = `Atraso de ${Math.floor(idade/60)} min`;
+    else if (!houveFluxo) sub.textContent = 'Sem fluxo ou geração';
+    else sub.textContent = 'Operando normalmente';
   }
+}
 
-  luz.className = `semaforo-luz ${estado}`;
-  titulo.textContent = `${icone} ${tituloTxt}`;
-  sub.textContent = subTxt;
-};
 
-/**
- * carregarKpis() — versao simplificada do antigo carregar()
+async function atualizarCardsEnergia(controladorId) {
+  try {
+    const r = await fetch(`/api/energia/resumo_dia.php?controlador_id=${controladorId}`, { credentials: 'same-origin' });
+    const j = await r.json();
+    if (!j.sucesso) return;
+
+    const e = j.energia_kwh || {};
+    const metricas = {
+      geracao:   e.geracao   ?? 0,
+      consumo:   e.consumo   ?? 0,
+      injetada:  e.exportada ?? 0,
+      importada: e.importada ?? 0
+    };
+
+    const maxVal = Math.max(...Object.values(metricas), 0.001);
+
+    for (const [k, v] of Object.entries(metricas)) {
+      const val = Number(v) || 0;
+      const elVal = document.getElementById(`ce-val-${k}`);
+      const elBar = document.getElementById(`ce-bar-${k}`);
+      if (elVal) elVal.innerHTML = `${val.toFixed(1)} <small>kWh</small>`;
+      if (elBar) elBar.style.width = `${Math.min(100, (val / maxVal) * 100).toFixed(1)}%`;
+    }
+
+    aplicarSemaforoFluxo(j);
+  } catch (err) {
+    console.error('[cards-energia]', err);
+  }
+}
+
+/** * carregarKpis() — versao simplificada do antigo carregar()
  * Mantem o consumo de /api/dashboard/dados.php (legado) mas
  * atualiza APENAS os 9 KPIs do topo. Series temporais, gauge
  * e totalizadores foram removidos no Patch B2.1.
@@ -1128,9 +1210,9 @@ async function carregarKpis() {
       document.getElementById('statusPill').className  = `kpi-status-pill ${isOnline ? 'online' : 'offline'}`;
       document.getElementById('statusTxt').textContent = isOnline ? 'ONLINE' : 'OFFLINE';
 
-      if (typeof window.aplicarSemaforo === 'function') {
-        window.aplicarSemaforo(controlador, atual?.rede, atual?.imovel, atual?.geracao, atual?.inversor);
-      }
+      window._dadosControlador = controlador;
+      if (typeof renderSemaforo === 'function') renderSemaforo();
+      if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
     }
 
     document.getElementById('refreshInfo').textContent =
