@@ -464,6 +464,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       display: flex; align-items: center; gap: 8px;
       font-size: .82rem; color: var(--muted, #9aa4b2);
     }
+    /* >>> TEMP-COBERTURA-SOLIS <<< */
+    .badge-cobertura { padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; margin-left: auto; }
+    .badge-ok      { background: #d1fae5; color: #065f46; }
+    .badge-parcial { background: #fef3c7; color: #92400e; }
+    .badge-critico { background: #fee2e2; color: #991b1b; }
+    /* >>> FIM TEMP-COBERTURA-SOLIS <<< */
     .card-energia .ce-valor {
       font-size: 1.5rem; font-weight: 700; margin: 4px 0 10px;
       color: var(--fg, #eef2f7);
@@ -975,7 +981,13 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
   <div id="cards-host">
     <div class="card-energia ce-geracao">
-      <div class="ce-topo">☀️ <span>Geração</span></div>
+      <div class="ce-topo">☀️ <span>Geração</span>
+        <!-- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<< -->
+        <span id="badge-cobertura" class="badge-cobertura badge-ok" style="display:none;" title="">
+          📡 <span id="badge-cobertura-pct"></span>%
+        </span>
+        <!-- >>> FIM TEMP-COBERTURA-SOLIS <<< -->
+      </div>
       <div class="ce-valor" id="ce-val-geracao">— <small>kWh</small></div>
       <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-geracao"></div></div>
     </div>
@@ -1171,6 +1183,19 @@ async function atualizarCardsEnergia(controladorId) {
       if (elVal) elVal.innerHTML = `${val.toFixed(1)} <small>kWh</small>`;
       if (elBar) elBar.style.width = `${Math.min(100, (val / maxVal) * 100).toFixed(1)}%`;
     }
+
+    // >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+    if (j.cobertura_geracao) {
+      const badge = document.getElementById('badge-cobertura');
+      const badgePct = document.getElementById('badge-cobertura-pct');
+      if (badge && badgePct) {
+        badge.style.display = 'inline-block';
+        badge.className = `badge-cobertura badge-${j.cobertura_geracao.status}`;
+        badge.title = j.cobertura_geracao.aviso || '';
+        badgePct.textContent = j.cobertura_geracao.pct;
+      }
+    }
+    // >>> FIM TEMP-COBERTURA-SOLIS <<<
 
     aplicarSemaforoFluxo(j);
   } catch (err) {

@@ -112,7 +112,11 @@ try {
             COALESCE(SUM(energia_geracao_kwh), 0)   AS geracao_dia,
             (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
             COALESCE(SUM(energia_geracao_kwh), 0) -
-            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia
+            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia,
+            -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+            SUM(energia_geracao_kwh IS NOT NULL) AS amostras_geracao,
+            COUNT(*) AS amostras_total
+            -- >>> FIM TEMP-COBERTURA-SOLIS <<<
           FROM telemetria_5min
           WHERE controlador_id = :cid
             AND timestamp_utc >= :inicio_utc
@@ -125,7 +129,11 @@ try {
             SUM(importada_dia) AS importada_kwh,
             SUM(exportada_dia) AS exportada_kwh,
             SUM(geracao_dia)   AS geracao_kwh,
-            SUM(consumo_dia)   AS consumo_kwh
+            SUM(consumo_dia)   AS consumo_kwh,
+            -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+            SUM(amostras_geracao) AS amostras_geracao,
+            SUM(amostras_total) AS amostras_total
+            -- >>> FIM TEMP-COBERTURA-SOLIS <<<
           FROM dias_fechados
           GROUP BY mes_ref
         )
@@ -134,7 +142,13 @@ try {
           COALESCE(AVG(importada_kwh), 0) AS media_importada_kwh,
           COALESCE(AVG(exportada_kwh), 0) AS media_exportada_kwh,
           COALESCE(AVG(geracao_kwh),   0) AS media_geracao_kwh,
-          COALESCE(AVG(consumo_kwh),   0) AS media_consumo_kwh
+          COALESCE(AVG(consumo_kwh),   0) AS media_consumo_kwh,
+          -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+          ROUND(
+            100.0 * SUM(amostras_geracao) / NULLIF(SUM(amostras_total), 0),
+            1
+          ) AS cobertura_geracao_pct
+          -- >>> FIM TEMP-COBERTURA-SOLIS <<<
         FROM meses_fechados;
     ";
     
@@ -246,6 +260,26 @@ try {
         ]
     ];
     
+    // >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+    $cobertura = (float)($linhaMedia['cobertura_geracao_pct'] ?? 0);
+    
+    if ($cobertura >= 90.0) {
+        $cobertura_status = 'ok';        // verde
+    } elseif ($cobertura >= 50.0) {
+        $cobertura_status = 'parcial';   // amarelo
+    } else {
+        $cobertura_status = 'critico';   // vermelho
+    }
+    
+    $resposta['cobertura_geracao'] = [
+        'pct'    => $cobertura,
+        'status' => $cobertura_status,
+        'aviso'  => $cobertura < 100.0
+            ? 'Dados de geração parcialmente importados do Solis. Consumo pode estar subestimado.'
+            : null,
+    ];
+    // >>> FIM TEMP-COBERTURA-SOLIS <<<
+
     echo json_encode($resposta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (PDOException $e) {

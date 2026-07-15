@@ -112,7 +112,10 @@ try {
           COALESCE(AVG(pot_media_consumo_w), 0) AS pot_media_consumo_w,
           COALESCE(AVG(qualidade_media), 0) AS qualidade_media,
           SUM(amostras) AS amostras,
-          SUM(amostras_sem_inversor) AS amostras_sem_inversor
+          SUM(amostras_sem_inversor) AS amostras_sem_inversor,
+          -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+          ROUND(SUM(cobertura_geracao_pct * amostras) / NULLIF(SUM(amostras), 0), 1) AS cobertura_geracao_pct
+          -- >>> FIM TEMP-COBERTURA-SOLIS <<<
         FROM (
           SELECT 
             MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_dia,
@@ -127,7 +130,13 @@ try {
             AVG(potencia_importada_w) - AVG(potencia_exportada_w) AS pot_media_consumo_w,
             AVG(qualidade_dado) AS qualidade_media,
             COUNT(*) AS amostras,
-            SUM(CASE WHEN geracao_origem = 'indisponivel' THEN 1 ELSE 0 END) AS amostras_sem_inversor
+            SUM(CASE WHEN geracao_origem = 'indisponivel' THEN 1 ELSE 0 END) AS amostras_sem_inversor,
+            -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+            ROUND(
+              100.0 * SUM(energia_geracao_kwh IS NOT NULL) / NULLIF(COUNT(*), 0),
+              1
+            ) AS cobertura_geracao_pct
+            -- >>> FIM TEMP-COBERTURA-SOLIS <<<
           FROM telemetria_5min
           WHERE controlador_id = :cid
             AND CONVERT_TZ(timestamp_utc, 'UTC', :tz) >= :inicio_mes
@@ -212,6 +221,26 @@ try {
         ]
     ];
     
+    // >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+    $cobertura = (float)($linha['cobertura_geracao_pct'] ?? 0);
+    
+    if ($cobertura >= 90.0) {
+        $cobertura_status = 'ok';        // verde
+    } elseif ($cobertura >= 50.0) {
+        $cobertura_status = 'parcial';   // amarelo
+    } else {
+        $cobertura_status = 'critico';   // vermelho
+    }
+    
+    $resposta['cobertura_geracao'] = [
+        'pct'    => $cobertura,
+        'status' => $cobertura_status,
+        'aviso'  => $cobertura < 100.0
+            ? 'Dados de geração parcialmente importados do Solis. Consumo pode estar subestimado.'
+            : null,
+    ];
+    // >>> FIM TEMP-COBERTURA-SOLIS <<<
+
     echo json_encode($resposta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (PDOException $e) {
