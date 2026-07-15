@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.15.0
+ * @versao        1.15.1
  * @modificado_em 2026-07-15
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -92,6 +92,7 @@
  *                        mentiroso entre load e primeiro fetch de KPIs.
  *   2026-07-15  v1.15.0  Infografico -> background fixo; cards 2x2 (resumo_dia.php);
  *                        fix semaforo (fluxo via resumo_dia, idade via dados.php) [CIP-DEC-20260715-001]
+ *   2026-07-15  v1.15.1  Fix stacking: cards ficavam atrás do infografico (z-index:-1 furava). isolation:isolate + z-index positivo.
  * ============================================================
  */
 
@@ -431,14 +432,14 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     #infografico-host {
       position: absolute;
       inset: 0;
-      z-index: -1;
+      z-index: 0;
       opacity: 0.15;
       pointer-events: none;
       overflow: hidden;
     }
     #infografico-host svg { width: 100%; height: 100%; }
 
-    .fluxo-wrapper { position: relative; min-height: 320px; padding: 16px; }
+    .fluxo-wrapper { position: relative; min-height: 320px; padding: 16px; isolation: isolate; }
 
     /* ===== Cards 2x2 ===== */
     #cards-host {
@@ -1024,7 +1025,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
 <footer class="footer">
   CIP — Controlador de Injeção de Potência Elétrica &nbsp;|&nbsp;
-  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.15.0
+  Aeonium &nbsp;|&nbsp; São Paulo, BR &nbsp;|&nbsp; v1.15.1
 </footer>
 
 <script>
