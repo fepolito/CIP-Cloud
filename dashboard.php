@@ -811,16 +811,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       <div class="label">Controlador</div>
       <?php if (empty($controladoresAcessiveis)): ?>
         <div class="nome">Nenhum controlador disponível, contate o administrador</div>
-      <?php elseif ($estadoA && count($controladoresAcessiveis) > 1): ?>
-        <select id="sel-controlador-main" class="sel-ctrl" onchange="trocarControlador(this.value)" style="background: transparent; border: 1px solid var(--border); color: var(--txt); padding: 8px 12px; border-radius: 8px; font-size: 14px; width: 100%; margin-top: 6px; outline: none; appearance: auto;">
-          <option value="" disabled selected>Selecione um controlador...</option>
-          <?php foreach ($controladoresAcessiveis as $c): ?>
-            <option value="<?= $c['id'] ?>" style="background: var(--card); color: var(--txt);">
-              <?= htmlspecialchars($c['codigo']) ?>
-              <?= $c['apelido'] ? ' — ' . htmlspecialchars($c['apelido']) : '' ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
       <?php else: ?>
         <div class="nome" id="nomeCtrl">Carregando...</div>
       <?php endif; ?>
@@ -1084,13 +1074,6 @@ const CTRL_CODIGO = <?= json_encode($controladorAtivo['codigo'] ?? null) ?>;
 
 const INTERVAL = 10000;
 let timer = null;
-
-function trocarControlador(novoId) {
-  if (!novoId) return;
-  const url = new URL(window.location.href);
-  url.searchParams.set('ctrl', novoId);
-  window.location.href = url.toString();
-}
 
 function lerCoresCss() {
   const cs = getComputedStyle(document.documentElement);

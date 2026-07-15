@@ -109,6 +109,11 @@ if (!$controladorAtivo && !empty($controladoresAcessiveis)) {
     $controladorAtivo = $controladoresAcessiveis[0];
 }
 
+// 💾 Save to session to persist across pages
+if ($controladorAtivo) {
+    $_SESSION['controlador_padrao'] = (int) $controladorAtivo['id'];
+}
+
 // 🛡️ Sem acesso a nenhum controlador? Trata o caso.
 if (!$controladorAtivo) {
     $semControlador = true;
@@ -651,25 +656,12 @@ $appIsAdmin = in_array($_SESSION['usuario_perfil'] ?? '', [
 
   <!-- ══════════════════════════════════════════ TOOLBAR -->
   <div class="toolbar">
-    <d	iv class="ctrl-info">
+    <div class="ctrl-info">
 	  <div class="label">Controlador</div>
-	  <?php if (count($controladoresAcessiveis) > 1): ?>
-		<select id="sel-controlador" class="sel-ctrl" onchange="trocarControlador(this.value)">
-		  <?php foreach ($controladoresAcessiveis as $c): ?>
-			<option value="<?= (int)$c['id'] ?>"
-					<?= $c['id'] == $controladorAtivo['id'] ? 'selected' : '' ?>>
-			  <?= htmlspecialchars($c['codigo']) ?>
-			  <?= $c['apelido'] ? ' — ' . htmlspecialchars($c['apelido']) : '' ?>
-			  <?= $c['empresa_nome'] ? ' · ' . htmlspecialchars($c['empresa_nome']) : '' ?>
-			</option>
-		  <?php endforeach; ?>
-		</select>
-	  <?php else: ?>
-		<div class="nome" id="ctrl-nome">
+	  <div class="nome" id="ctrl-nome">
 		  <?= htmlspecialchars($controladorAtivo['codigo'] ?? 'Sem controlador') ?>
 		  <?= !empty($controladorAtivo['apelido']) ? ' — ' . htmlspecialchars($controladorAtivo['apelido']) : '' ?>
 		</div>
-	  <?php endif; ?>
 	</div>
 
     <div class="periodo-group">
@@ -1477,11 +1469,6 @@ function atualizarUI(json, modo) {
 
 
 // 🔄 Troca de controlador via seletor
-function trocarControlador(novoId) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('ctrl', novoId);
-  window.location.href = url.toString();
-}
 /* ════════════════════════════════════════
    CARREGAMENTO PRINCIPAL
 ════════════════════════════════════════ */

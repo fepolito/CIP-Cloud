@@ -125,61 +125,28 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
     if (isset($estadoA) && $estadoA && count($controladoresAcessiveis) > 1) $mostrarPill = false;
     ?>
     <?php if ($mostrarPill): ?>
-        <div class="ctrl-pill-wrapper" style="position: relative;">
+        <div class="ctrl-global-wrapper" style="margin-right: 15px; display: flex; align-items: center;">
             <?php if (count($controladoresAcessiveis) > 1): ?>
-                <button type="button" class="ctrl-pill-btn" id="btnCtrlPill" aria-expanded="false" aria-controls="ctrlPillDropdown" onclick="document.getElementById('ctrlPillDropdown').hidden = !document.getElementById('ctrlPillDropdown').hidden; this.setAttribute('aria-expanded', !document.getElementById('ctrlPillDropdown').hidden);">
-                    <span class="ctrl-pill-icon">📡</span>
-                    <span class="ctrl-pill-name">
-                        <?php echo e($controladorAtivo['codigo'] . ($controladorAtivo['apelido'] ? ' — ' . $controladorAtivo['apelido'] : '')); ?>
-                    </span>
-                    <span class="ctrl-pill-arrow">▼</span>
-                    <?php if (isset($controladorAtivo['online'])): ?>
-                        <span class="ctrl-pill-status <?php echo $controladorAtivo['online'] ? 'online' : 'offline'; ?>"></span>
-                    <?php endif; ?>
-                </button>
-                <div class="ctrl-pill-dropdown" id="ctrlPillDropdown" hidden style="position: absolute; top: calc(100% + 10px); right: 0; background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 1300; width: 280px; max-width: 90vw;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--color-border, #e2e8f0);">
-                        <span style="font-size: 13px; font-weight: 700; color: var(--color-text-muted, #64748b); text-transform: uppercase; letter-spacing: 1px;">Trocar controlador</span>
-                        <button type="button" onclick="document.getElementById('ctrlPillDropdown').hidden = true; document.getElementById('btnCtrlPill').setAttribute('aria-expanded', 'false');" style="background: none; border: none; cursor: pointer; color: var(--color-text-muted, #64748b); font-size: 16px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 6px;">✕</button>
-                    </div>
-                    <ul style="list-style: none; margin: 0; padding: 8px; max-height: 300px; overflow-y: auto;">
-                        <?php foreach ($controladoresAcessiveis as $c): ?>
-                            <li>
-                                <a href="?ctrl=<?php echo $c['id']; ?>" style="display: block; padding: 10px 12px; text-decoration: none; color: var(--color-text, #0f172a); font-size: 14px; font-weight: 500; border-radius: 8px; <?php echo $c['id'] == $controladorAtivo['id'] ? 'background: var(--color-primary-light, #eff6ff); color: var(--color-primary, #1d4ed8);' : ''; ?>" class="ctrl-dropdown-item">
-                                    <?php echo e($c['codigo'] . ($c['apelido'] ? ' — ' . $c['apelido'] : '')); ?>
-                                </a>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
+                <select id="sel-controlador-global" class="sel-ctrl" onchange="trocarControlador(this.value)" style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); color: var(--color-text, #0f172a); padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; outline: none; cursor: pointer; min-width: 150px;">
+                    <option value="" disabled>Selecione um controlador...</option>
+                    <?php foreach ($controladoresAcessiveis as $c): ?>
+                        <option value="<?php echo $c['id']; ?>" <?php echo $c['id'] == $controladorAtivo['id'] ? 'selected' : ''; ?>>
+                            <?php echo e($c['codigo'] . ($c['apelido'] ? ' — ' . $c['apelido'] : '')); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
                 <script>
-                    document.addEventListener('click', function(e) {
-                        const btn = document.getElementById('btnCtrlPill');
-                        const drop = document.getElementById('ctrlPillDropdown');
-                        if (btn && drop && !drop.hidden && !btn.contains(e.target) && !drop.contains(e.target)) {
-                            drop.hidden = true;
-                            btn.setAttribute('aria-expanded', 'false');
-                        }
-                    });
-                    document.addEventListener('keydown', function(e) {
-                        const btn = document.getElementById('btnCtrlPill');
-                        const drop = document.getElementById('ctrlPillDropdown');
-                        if (e.key === 'Escape' && drop && !drop.hidden) {
-                            drop.hidden = true;
-                            btn.setAttribute('aria-expanded', 'false');
-                            btn.focus();
-                        }
-                    });
+                    function trocarControlador(novoId) {
+                        if (!novoId) return;
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('ctrl', novoId);
+                        window.location.href = url.toString();
+                    }
                 </script>
             <?php else: ?>
-                <div class="ctrl-pill-btn static" style="cursor: default;">
-                    <span class="ctrl-pill-icon">📡</span>
-                    <span class="ctrl-pill-name">
-                        <?php echo e($controladorAtivo['codigo'] . ($controladorAtivo['apelido'] ? ' — ' . $controladorAtivo['apelido'] : '')); ?>
-                    </span>
-                    <?php if (isset($controladorAtivo['online'])): ?>
-                        <span class="ctrl-pill-status <?php echo $controladorAtivo['online'] ? 'online' : 'offline'; ?>"></span>
-                    <?php endif; ?>
+                <div style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); color: var(--color-text, #0f172a); padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                    <span>📡</span>
+                    <?php echo e($controladorAtivo['codigo'] . ($controladorAtivo['apelido'] ? ' — ' . $controladorAtivo['apelido'] : '')); ?>
                 </div>
             <?php endif; ?>
         </div>
