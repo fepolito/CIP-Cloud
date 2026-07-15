@@ -971,6 +971,8 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         </span>
       </div>
     </div>
+  </div><!-- /infografico-host -->
+
   <div id="cards-host">
     <div class="card-energia ce-geracao">
       <div class="ce-topo">☀️ <span>Geração</span></div>
