@@ -16,11 +16,7 @@
 
 declare(strict_types=1);
 
-$serverName = $_SERVER['SERVER_NAME'] ?? '';
-$is_dev = true; // FORCE DEV TO SEE ERROR  
-        || str_ends_with($serverName, '.local') 
-        || str_ends_with($serverName, '.test'));
-
+$is_dev = true; // FORCE DEV TO SEE ERROR
 if ($is_dev) {
     ini_set('display_errors', '1');
 } else {
