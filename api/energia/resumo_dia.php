@@ -125,7 +125,7 @@ try {
           SUM(CASE WHEN geracao_origem = 'indisponivel' THEN 1 ELSE 0 END) AS amostras_sem_inversor,
           -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
           ROUND(
-            100.0 * SUM(energia_geracao_kwh IS NOT NULL) / NULLIF(COUNT(*), 0),
+            100.0 * COUNT(energia_geracao_kwh) / NULLIF(COUNT(*), 0),
             1
           ) AS cobertura_geracao_pct
           -- >>> FIM TEMP-COBERTURA-SOLIS <<<

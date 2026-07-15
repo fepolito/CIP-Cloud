@@ -114,7 +114,7 @@ try {
             COALESCE(SUM(energia_geracao_kwh), 0) -
             (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia,
             -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
-            SUM(energia_geracao_kwh IS NOT NULL) AS amostras_geracao,
+            COUNT(energia_geracao_kwh) AS amostras_geracao,
             COUNT(*) AS amostras_total
             -- >>> FIM TEMP-COBERTURA-SOLIS <<<
           FROM telemetria_5min
