@@ -1134,7 +1134,9 @@ function renderSemaforo() {
   const luz = document.getElementById('semLuz');
   const titulo = document.getElementById('semTitulo');
   const sub = document.getElementById('semSub');
+  const semaforoDiv = document.getElementById('semaforo');
 
+  if (semaforoDiv) semaforoDiv.style.display = 'flex';
   if (luz) luz.className = `semaforo-luz ${classe}`;
   if (titulo) titulo.textContent = `${icone} ${tituloTxt}`;
   if (sub) {
