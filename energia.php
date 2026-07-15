@@ -656,14 +656,6 @@ $appIsAdmin = in_array($_SESSION['usuario_perfil'] ?? '', [
 
   <!-- ══════════════════════════════════════════ TOOLBAR -->
   <div class="toolbar">
-    <div class="ctrl-info">
-	  <div class="label">Controlador</div>
-	  <div class="nome" id="ctrl-nome">
-		  <?= htmlspecialchars($controladorAtivo['codigo'] ?? 'Sem controlador') ?>
-		  <?= !empty($controladorAtivo['apelido']) ? ' — ' . htmlspecialchars($controladorAtivo['apelido']) : '' ?>
-		</div>
-	</div>
-
     <div class="periodo-group">
       <div class="modo-btns">
         <button class="mb ativo" id="mb-dia"  onclick="setModo('dia')">DIA</button>

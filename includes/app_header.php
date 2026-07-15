@@ -125,7 +125,15 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
     if (isset($estadoA) && $estadoA && count($controladoresAcessiveis) > 1) $mostrarPill = false;
     ?>
     <?php if ($mostrarPill): ?>
-        <div class="ctrl-global-wrapper" style="margin-right: 15px; display: flex; align-items: center;">
+        <div class="ctrl-global-wrapper" style="margin-right: 15px; display: flex; align-items: center; gap: 8px;">
+            <?php
+            $idadePing = isset($controladorAtivo['ultimo_ping']) ? time() - strtotime($controladorAtivo['ultimo_ping']) : 999999;
+            $semIcon = '🔴'; $semTitle = 'Offline';
+            if ($idadePing < 300) { $semIcon = '🟢'; $semTitle = 'Online'; }
+            elseif ($idadePing < 900) { $semIcon = '🟡'; $semTitle = 'Atrasado'; }
+            ?>
+            <span title="<?php echo $semTitle; ?>" style="font-size: 14px; cursor: help;"><?php echo $semIcon; ?></span>
+            
             <?php if (count($controladoresAcessiveis) > 1): ?>
                 <select id="sel-controlador-global" class="sel-ctrl" onchange="trocarControlador(this.value)" style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); color: var(--color-text, #0f172a); padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; outline: none; cursor: pointer; min-width: 150px;">
                     <option value="" disabled>Selecione um controlador...</option>

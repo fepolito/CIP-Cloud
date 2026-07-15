@@ -762,34 +762,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       .kpi-lbl  { font-size: 9px; }
       .kpi-icon { font-size: 20px; }
     }
-
-    /* ── SEMAFORO DE SAUDE (Fase 2) ── */
-    .semaforo {
-      display: flex; align-items: center; gap: 18px;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: 12px; padding: 16px 24px;
-      margin: 20px 0;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .semaforo-luz {
-      width: 24px; height: 24px; border-radius: 50%;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
-      transition: all 0.4s ease;
-      flex-shrink: 0;
-    }
-    .semaforo-luz.cinza    { background: #555; }
-    .semaforo-luz.verde    { background: var(--green);  box-shadow: 0 0 12px var(--green), inset 0 2px 4px rgba(0,0,0,0.3); }
-    .semaforo-luz.amarelo  { background: var(--yellow); box-shadow: 0 0 12px var(--yellow), inset 0 2px 4px rgba(0,0,0,0.3); }
-    .semaforo-luz.vermelho { background: var(--red);    box-shadow: 0 0 12px var(--red), inset 0 2px 4px rgba(0,0,0,0.3); }
-    .semaforo-info {
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .semaforo-info strong {
-      font-size: 1.1rem; color: var(--txt); letter-spacing: -0.01em;
-    }
-    .semaforo-info span {
-      font-size: 0.9rem; color: var(--txt-dim); line-height: 1.4;
-    }
   </style>
 </head>
 <body>
@@ -806,26 +778,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 <!-- ── Conteúdo principal ───────────────────────────────────── -->
 <div class="wrap">
 
-  <div class="toolbar">
-    <div class="ctrl-info">
-      <div class="label">Controlador</div>
-      <?php if (empty($controladoresAcessiveis)): ?>
-        <div class="nome">Nenhum controlador disponível, contate o administrador</div>
-      <?php else: ?>
-        <div class="nome" id="nomeCtrl">Carregando...</div>
-      <?php endif; ?>
-    </div>
-    <span class="refresh-info" id="refreshInfo">⏱ —</span>
-  </div>
-
-  <!-- ── SEMÁFORO DE SAÚDE DA INSTALAÇÃO ── -->
-  <div class="semaforo" id="semaforo" style="display: none;">
-    <div class="semaforo-luz cinza" id="semLuz"></div>
-    <div class="semaforo-info">
-      <strong id="semTitulo">⚪ Verificando status...</strong>
-      <span id="semSub">Aguardando dados da usina...</span>
-    </div>
-  </div>
+  <span class="refresh-info" id="refreshInfo" style="display:block; text-align:right; margin-bottom:10px;">⏳ —</span>
 
   <!-- ════════════════════════════════════════════════════════
        INFOGRAFICO ANIMADO DE FLUXO ENERGETICO (B2.2 v1.11.0)
@@ -918,9 +871,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa" x="0" y="0" width="160" height="120" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">☀️</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">MODULOS FV</text>
-          
-          
-          
         </g>
 
         <!-- No: REDE / CONCESSIONARIA -->
@@ -928,16 +878,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa" x="0" y="0" width="160" height="180" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">⚡</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">REDE</text>
-
-          <!-- Linha importada (amarelo) -->
-          
-          
-          
-
-          <!-- Linha exportada (azul) -->
-          
-          
-          
         </g>
 
         <!-- No: IMOVEL (central) -->
@@ -945,13 +885,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa destaque" x="0" y="0" width="200" height="180" rx="16"/>
           <text class="no-emoji"  x="100" y="42" text-anchor="middle">🏠</text>
           <text class="no-titulo" x="100" y="66" text-anchor="middle">IMOVEL</text>
-
-          
-          
-          
-
-          
-          
         </g>
 
         <!-- No: BATERIA (standby) -->
@@ -959,10 +892,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa" x="0" y="0" width="160" height="150" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">🔋</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">BATERIA</text>
-          
-          
-          
-          
         </g>
 
       </svg>
@@ -1026,32 +955,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
   </div>
 </div><!-- /fluxo-wrapper -->
 
-
-  <!-- KPIs status do controlador -->
-  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
-    <div class="kpi" style="--kc:var(--green)">
-      <div class="kpi-lbl">Status do Controlador</div>
-      <div id="statusPill" class="kpi-status-pill verificando">
-        <div class="pill-dot"></div>
-        <span id="statusTxt">VERIFICANDO</span>
-      </div>
-      <div class="kpi-sub" id="tPing">Último ping: —</div>
-      <div class="kpi-icon">📡</div>
-    </div>
-    <div class="kpi" style="--kc:var(--blue2)">
-      <div class="kpi-lbl">Localização</div>
-      <div class="kpi-val" style="font-size:14px;line-height:1.4" id="tLoc">—</div>
-      <div class="kpi-icon">📍</div>
-    </div>
-    <div class="kpi" style="--kc:var(--txt-mid)">
-      <div class="kpi-lbl">Controlador</div>
-      <div class="kpi-val" style="font-size:14px;line-height:1.4" id="nomeCtrlKpi">—</div>
-      <div class="kpi-icon">🖥️</div>
-    </div>
-  </div>
-
-
-
 </div><!-- /wrap -->
 
 <footer class="footer">
@@ -1064,12 +967,8 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
 <?php if (empty($controladoresAcessiveis)): ?>
 const CTRL_ID = null;
-const CTRL_NOME = null;
-const CTRL_CODIGO = null;
 <?php else: ?>
 const CTRL_ID = <?= json_encode((int) $controladorAtivo['id']) ?>;
-const CTRL_NOME = <?= json_encode($controladorAtivo['apelido'] ?? null) ?>;
-const CTRL_CODIGO = <?= json_encode($controladorAtivo['codigo'] ?? null) ?>;
 <?php endif; ?>
 
 const INTERVAL = 10000;
@@ -1083,22 +982,13 @@ function lerCoresCss() {
   };
   return {
     blue:    pega('--blue',    '#00b4ff'),
-    blue2:   pega('--blue2',   '#0070cc'),
     green:   pega('--green',   '#00e676'),
     yellow:  pega('--yellow',  '#ffc107'),
-    orange:  pega('--orange',  '#ff9800'),
-    red:     pega('--red',     '#ff5252'),
-    purple:  pega('--purple',  '#ce93d8'),
-    cyan:    pega('--cyan',    '#18ffff'),
     txt:     pega('--txt',     '#e0eaf8'),
-    dim:     pega('--border',  '#1a2d4a'),
-    bg:      pega('--card',    '#0d1526'),
   };
 }
 
 let C = lerCoresCss();
-
-const fmt = (v, d, u) => v != null ? `${(+v).toFixed(d)} ${u}`.trim() : '—';
 
 async function verificarToken() {
   try {
@@ -1106,13 +996,8 @@ async function verificarToken() {
     if (!res.ok) { window.location.href = '/login.php'; return false; }
     const data = await res.json();
     if (!data.success) { window.location.href = '/login.php'; return false; }
-    sessionStorage.setItem('cip_usuario_nome',  data.usuario.nome);
-    sessionStorage.setItem('cip_usuario_email', data.usuario.email);
-    if (data.segundos_restantes < 1800)
-      console.warn(`[CIP] Sessão expira em ${data.segundos_restantes}s`);
     return true;
   } catch (e) {
-    console.warn('[CIP] verify.php inacessível — modo offline');
     return true;
   }
 }
@@ -1120,55 +1005,11 @@ async function verificarToken() {
 async function logout() {
   try {
     await fetch('/api/auth/logout.php', { method: 'POST', credentials: 'same-origin' });
-  } catch (e) {
-    // ignora
-  } finally {
+  } catch (e) {} finally {
     sessionStorage.clear();
     window.location.href = '/login.php';
   }
 }
-
-const SEM = { STALE_S: 1200, OFFLINE_S: 2400 };
-
-const OFFLINE_S = 900;   // 15 min sem ping = vermelho
-const STALE_S   = 300;   // 5 min = amarelo
-
-let _ultimoResumoDia = null;
-function aplicarSemaforoFluxo(resumo) { _ultimoResumoDia = resumo; renderSemaforo(); }
-
-function renderSemaforo() {
-  const pingIso = window._dadosControlador?.ultimo_ping;
-  const idade = pingIso ? (Date.now() - new Date(pingIso).getTime()) / 1000 : Infinity;
-
-  const r = _ultimoResumoDia || {};
-  const picG = r.potencia_pico_dia_kw?.geracao   ?? 0;
-  const picE = r.potencia_pico_dia_kw?.exportada ?? 0;
-  const geraKwh = r.energia_kwh?.geracao ?? 0;
-  const invConn = r.inversor?.conectado === true;
-  const houveFluxo = picG > 0.03 || picE > 0.03 || geraKwh > 0.01 || invConn;
-
-  let icone, tituloTxt, classe;
-  if (idade >= OFFLINE_S)      { icone='🔴'; tituloTxt='Sem comunicação'; classe='sem-off'; }
-  else if (idade >= STALE_S)   { icone='🟡'; tituloTxt='Dados atrasados'; classe='sem-stale'; }
-  else if (!houveFluxo)        { icone='🌙'; tituloTxt='Usina em repouso'; classe='sem-idle'; }
-  else                         { icone='🟢'; tituloTxt='Usina ativa';      classe='sem-on'; }
-
-  const luz = document.getElementById('semLuz');
-  const titulo = document.getElementById('semTitulo');
-  const sub = document.getElementById('semSub');
-  const semaforoDiv = document.getElementById('semaforo');
-
-  if (semaforoDiv) semaforoDiv.style.display = 'flex';
-  if (luz) luz.className = `semaforo-luz ${classe}`;
-  if (titulo) titulo.textContent = `${icone} ${tituloTxt}`;
-  if (sub) {
-    if (idade >= OFFLINE_S) sub.textContent = `Offline há mais de ${Math.floor(idade/60)} min`;
-    else if (idade >= STALE_S) sub.textContent = `Atraso de ${Math.floor(idade/60)} min`;
-    else if (!houveFluxo) sub.textContent = 'Sem fluxo ou geração';
-    else sub.textContent = 'Operando normalmente';
-  }
-}
-
 
 async function atualizarCardsEnergia(controladorId) {
   try {
@@ -1177,17 +1018,14 @@ async function atualizarCardsEnergia(controladorId) {
     if (!data.sucesso) return;
 
     const e = data.energia_kwh || {};
-
     const metricas = {
       geracao:   e.geracao   ?? 0,
       consumo:   e.consumo   ?? 0,
-      injetada:  e.exportada ?? 0,   // exportada -> injetada
+      injetada:  e.exportada ?? 0,
       importada: e.importada ?? 0,
     };
 
-    // maior valor = 100% da barra (escala relativa)
     const max = Math.max(...Object.values(metricas), 1);
-
     for (const [chave, valor] of Object.entries(metricas)) {
       const pct = (valor / max) * 100;
       const bar = document.getElementById(`ce-bar-${chave}`);
@@ -1249,11 +1087,11 @@ async function carregarKpis() {
       const diff     = controlador.ultimo_ping
         ? (Date.now() - new Date(controlador.ultimo_ping).getTime()) / 1000 : 999;
       const isOnline = diff < SEM.OFFLINE_S;
-      document.getElementById('statusPill').className  = `kpi-status-pill ${isOnline ? 'online' : 'offline'}`;
-      document.getElementById('statusTxt').textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+      //.className  = `kpi-status-pill ${isOnline ? 'online' : 'offline'}`;
+      //.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
 
       window._dadosControlador = controlador;
-      if (typeof renderSemaforo === 'function') renderSemaforo();
+      if (typeof renderSemaforo === 'function') //;
       if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
     }
 
