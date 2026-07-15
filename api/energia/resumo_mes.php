@@ -97,38 +97,51 @@ try {
     $dtInicio = (new DateTimeImmutable('first day of this month', $tz))->setTime(0, 0, 0);
     $dtFim    = (new DateTimeImmutable('first day of this month', $tz))->modify('+1 month')->setTime(0, 0, 0);
     
-    $inicioUtc = $dtInicio->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-    $fimUtc    = $dtFim->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $inicioMes = $dtInicio->format('Y-m-d H:i:s');
+    $fimMes    = $dtFim->format('Y-m-d H:i:s');
     
     $sqlData = "
         SELECT 
-          COALESCE(MAX(energia_importada_kwh) - MIN(energia_importada_kwh), 0) AS importada_kwh,
-          COALESCE(MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh), 0) AS exportada_kwh,
-          COALESCE(SUM(energia_geracao_kwh), 0) AS geracao_kwh,
-          COALESCE(
+          COALESCE(SUM(importada_dia), 0) AS importada_kwh,
+          COALESCE(SUM(exportada_dia), 0) AS exportada_kwh,
+          COALESCE(SUM(geracao_dia), 0) AS geracao_kwh,
+          COALESCE(SUM(consumo_dia), 0) AS consumo_kwh,
+          COALESCE(AVG(pot_media_importada_w), 0) AS pot_media_importada_w,
+          COALESCE(AVG(pot_media_exportada_w), 0) AS pot_media_exportada_w,
+          COALESCE(AVG(pot_media_geracao_w), 0) AS pot_media_geracao_w,
+          COALESCE(AVG(pot_media_consumo_w), 0) AS pot_media_consumo_w,
+          COALESCE(AVG(qualidade_media), 0) AS qualidade_media,
+          SUM(amostras) AS amostras,
+          SUM(amostras_sem_inversor) AS amostras_sem_inversor
+        FROM (
+          SELECT 
+            MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_dia,
+            MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_dia,
+            SUM(energia_geracao_kwh) AS geracao_dia,
             (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
             COALESCE(SUM(energia_geracao_kwh), 0) -
-            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)),
-            0
-          ) AS consumo_kwh,
-          COALESCE(AVG(potencia_importada_w), 0) AS pot_media_importada_w,
-          COALESCE(AVG(potencia_exportada_w), 0) AS pot_media_exportada_w,
-          COALESCE(AVG(potencia_geracao_w),   0) AS pot_media_geracao_w,
-          COALESCE(AVG(potencia_importada_w) - AVG(potencia_exportada_w), 0) AS pot_media_consumo_w,
-          COALESCE(AVG(qualidade_dado), 0) AS qualidade_media,
-          COUNT(*) AS amostras,
-          SUM(CASE WHEN geracao_origem = 'indisponivel' THEN 1 ELSE 0 END) AS amostras_sem_inversor
-        FROM telemetria_5min
-        WHERE controlador_id = :cid
-          AND timestamp_utc >= :inicio_utc
-          AND timestamp_utc <  :fim_utc
+            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia,
+            AVG(potencia_importada_w) AS pot_media_importada_w,
+            AVG(potencia_exportada_w) AS pot_media_exportada_w,
+            AVG(potencia_geracao_w) AS pot_media_geracao_w,
+            AVG(potencia_importada_w) - AVG(potencia_exportada_w) AS pot_media_consumo_w,
+            AVG(qualidade_dado) AS qualidade_media,
+            COUNT(*) AS amostras,
+            SUM(CASE WHEN geracao_origem = 'indisponivel' THEN 1 ELSE 0 END) AS amostras_sem_inversor
+          FROM telemetria_5min
+          WHERE controlador_id = :cid
+            AND CONVERT_TZ(timestamp_utc, 'UTC', :tz) >= :inicio_mes
+            AND CONVERT_TZ(timestamp_utc, 'UTC', :tz) < :fim_mes
+          GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz))
+        ) AS daily_stats
     ";
     
     $stmtData = $pdo->prepare($sqlData);
     $stmtData->execute([
         ':cid' => $controladorId,
-        ':inicio_utc' => $inicioUtc,
-        ':fim_utc' => $fimUtc
+        ':tz'  => $tzStr,
+        ':inicio_mes' => $inicioMes,
+        ':fim_mes' => $fimMes
     ]);
     $linha = $stmtData->fetch(PDO::FETCH_ASSOC);
     if (!$linha) {

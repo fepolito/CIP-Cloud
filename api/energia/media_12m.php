@@ -104,19 +104,29 @@ try {
     $fimUtc    = $dtFim->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     
     $sqlMedia = "
-        WITH meses_fechados AS (
+        WITH dias_fechados AS (
           SELECT 
             DATE_FORMAT(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str), '%Y-%m') AS mes_ref,
-            MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_kwh,
-            MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_kwh,
-            COALESCE(SUM(energia_geracao_kwh), 0)   AS geracao_kwh,
+            MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_dia,
+            MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_dia,
+            COALESCE(SUM(energia_geracao_kwh), 0)   AS geracao_dia,
             (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
             COALESCE(SUM(energia_geracao_kwh), 0) -
-            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_kwh
+            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia
           FROM telemetria_5min
           WHERE controlador_id = :cid
             AND timestamp_utc >= :inicio_utc
             AND timestamp_utc <  :fim_utc
+          GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str)), mes_ref
+        ),
+        meses_fechados AS (
+          SELECT 
+            mes_ref,
+            SUM(importada_dia) AS importada_kwh,
+            SUM(exportada_dia) AS exportada_kwh,
+            SUM(geracao_dia)   AS geracao_kwh,
+            SUM(consumo_dia)   AS consumo_kwh
+          FROM dias_fechados
           GROUP BY mes_ref
         )
         SELECT
@@ -145,26 +155,29 @@ try {
     
     $dtFimMesCorrente = $dtFim->modify('+1 month');
     $inicioMesUtc = $dtFim->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-    $fimMesUtc = $dtFimMesCorrente->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-    
+    $hojeUtc = (new DateTimeImmutable('now', $tz))->setTime(0, 0, 0)->modify('+1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+
     $sqlMesCorrente = "
         SELECT 
-          COALESCE(
+          COALESCE(SUM(consumo_dia), 0) AS consumo_parcial_kwh
+        FROM (
+          SELECT 
             (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
             COALESCE(SUM(energia_geracao_kwh), 0) -
-            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)),
-            0
-          ) AS consumo_parcial_kwh
-        FROM telemetria_5min
-        WHERE controlador_id = :cid
-          AND timestamp_utc >= :inicio_mes_utc
-          AND timestamp_utc <  :fim_mes_utc;
+            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia
+          FROM telemetria_5min
+          WHERE controlador_id = :cid
+            AND timestamp_utc >= :inicio_mes_utc
+            AND timestamp_utc <  :hoje_utc
+          GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str))
+        ) AS daily_stats;
     ";
     $stmtMesCorrente = $pdo->prepare($sqlMesCorrente);
     $stmtMesCorrente->execute([
         ':cid' => $controladorId,
         ':inicio_mes_utc' => $inicioMesUtc,
-        ':fim_mes_utc' => $fimMesUtc
+        ':hoje_utc' => $hojeUtc,
+        ':tz_str' => $tzStr
     ]);
     $linhaMesCorrente = $stmtMesCorrente->fetch(PDO::FETCH_ASSOC);
     $consumoParcial = (float) ($linhaMesCorrente['consumo_parcial_kwh'] ?? 0);
