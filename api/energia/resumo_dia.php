@@ -209,6 +209,26 @@ try {
         ]
     ];
     
+    // >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+    $cobertura = (float)($linha['cobertura_geracao_pct'] ?? 0);
+    
+    if ($cobertura >= 90.0) {
+        $cobertura_status = 'ok';        // verde
+    } elseif ($cobertura >= 50.0) {
+        $cobertura_status = 'parcial';   // amarelo
+    } else {
+        $cobertura_status = 'critico';   // vermelho
+    }
+    
+    $resposta['cobertura_geracao'] = [
+        'pct'    => $cobertura,
+        'status' => $cobertura_status,
+        'aviso'  => $cobertura < 100.0
+            ? 'Dados de geração parcialmente importados do Solis. Consumo pode estar subestimado.'
+            : null,
+    ];
+    // >>> FIM TEMP-COBERTURA-SOLIS <<<
+    
     echo json_encode($resposta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (PDOException $e) {
