@@ -430,64 +430,80 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
     /* ===== Infográfico como background decorativo ===== */
     #infografico-host {
-      position: absolute;
-      inset: 0;
+      position: sticky;          /* fica preso no topo enquanto rola */
+      top: 0;
       z-index: 0;
-      opacity: 0.15;
-      pointer-events: none;
-      overflow: hidden;
+      opacity: 1;                /* começa VÍVIDO (era 0.15) */
+      transform-origin: center top;
+      will-change: opacity, transform;
+      transition: opacity .15s linear;
+      pointer-events: none;      /* não bloqueia cliques nos cards */
     }
     #infografico-host svg { width: 100%; height: 100%; }
 
     .fluxo-wrapper { position: relative; min-height: 320px; padding: 16px; isolation: isolate; }
 
-    /* ===== Cards 2x2 ===== */
+    /* ===== CARD DE BARRAS UNIFICADO ===== */
     #cards-host {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 14px;
       position: relative;
-      z-index: 1;
-    }
-    @media (max-width: 480px) {
-      #cards-host { grid-template-columns: 1fr; }
+      z-index: 1;                /* cards por cima ao rolar */
+      margin-top: 40vh;          /* empurra os cards p/ baixo -> diagrama aparece 1º */
     }
 
-    .card-energia {
+    .card-barras {
+      padding: 20px 24px;
       background: var(--card-bg, rgba(20,24,33,0.72));
       backdrop-filter: blur(4px);
       border: 1px solid var(--card-border, rgba(255,255,255,0.08));
       border-radius: 14px;
-      padding: 14px 16px;
     }
-    .card-energia .ce-topo {
-      display: flex; align-items: center; gap: 8px;
-      font-size: .82rem; color: var(--muted, #9aa4b2);
+    .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--fg, #eef2f7); }
+    .cb-titulo small { font-weight: 400; opacity: .6; }
+
+    /* grid: ícone | label | barra (flexível) | valor */
+    .cb-linha {
+      display: grid;
+      grid-template-columns: 28px 110px 1fr 90px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      color: var(--fg, #eef2f7);
     }
+    .cb-linha:last-child { margin-bottom: 0; }
+
+    .cb-icone { font-size: 18px; text-align: center; }
+    .cb-label { font-size: 13px; font-weight: 600; white-space: nowrap; display:flex; align-items:center; gap:6px; }
+
     /* >>> TEMP-COBERTURA-SOLIS <<< */
-    .badge-cobertura { padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; margin-left: auto; }
+    .badge-cobertura { padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
     .badge-ok      { background: #d1fae5; color: #065f46; }
     .badge-parcial { background: #fef3c7; color: #92400e; }
     .badge-critico { background: #fee2e2; color: #991b1b; }
     /* >>> FIM TEMP-COBERTURA-SOLIS <<< */
-    .card-energia .ce-valor {
-      font-size: 1.5rem; font-weight: 700; margin: 4px 0 10px;
-      color: var(--fg, #eef2f7);
-    }
-    .card-energia .ce-valor small { font-size: .8rem; font-weight: 500; color: var(--muted,#9aa4b2); }
 
-    .ce-bar-track {
-      height: 8px; border-radius: 999px;
-      background: rgba(255,255,255,0.08); overflow: hidden;
+    .cb-track {
+      height: 14px;
+      background: rgba(0,0,0,.08);
+      border-radius: 8px;
+      overflow: hidden;
     }
-    .ce-bar-fill {
-      height: 100%; border-radius: 999px;
-      width: 0%; transition: width .6s ease;
+    .cb-fill {
+      height: 100%;
+      width: 0;                       /* JS anima até o % correto */
+      border-radius: 8px;
+      transition: width .9s cubic-bezier(.22,1,.36,1);
     }
-    .ce-geracao   .ce-bar-fill { background: linear-gradient(90deg,#ffb020,#ffd466); }
-    .ce-consumo   .ce-bar-fill { background: linear-gradient(90deg,#4a90e2,#6fb0ff); }
-    .ce-injetada  .ce-bar-fill { background: linear-gradient(90deg,#2ecc71,#6ff0a5); }
-    .ce-importada .ce-bar-fill { background: linear-gradient(90deg,#e05555,#ff8585); }
+    .fill-geracao   { background: linear-gradient(90deg,#fbbf24,#f59e0b); }
+    .fill-consumo   { background: linear-gradient(90deg,#60a5fa,#2563eb); }
+    .fill-injetada  { background: linear-gradient(90deg,#34d399,#059669); }
+    .fill-importada { background: linear-gradient(90deg,#f87171,#dc2626); }
+
+    .cb-valor { font-size: 14px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 768px) {
+      .cb-linha { grid-template-columns: 24px 80px 1fr 70px; gap: 6px; }
+      #cards-host { margin-top: 30vh; }
+    }
 
     .infografico-wrap {
       background: var(--card);
@@ -980,31 +996,42 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
   </div><!-- /infografico-host -->
 
   <div id="cards-host">
-    <div class="card-energia ce-geracao">
-      <div class="ce-topo">☀️ <span>Geração</span>
-        <!-- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<< -->
-        <span id="badge-cobertura" class="badge-cobertura badge-ok" style="display:none;" title="">
-          📡 <span id="badge-cobertura-pct"></span>%
+    <div class="card-energia card-barras">
+      <h3 class="cb-titulo">⚡ Balanço Energético <small>(kWh)</small></h3>
+
+      <div class="cb-linha" data-metrica="geracao">
+        <span class="cb-icone">☀️</span>
+        <span class="cb-label">Geração
+          <!-- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<< -->
+          <span id="badge-cobertura" class="badge-cobertura badge-ok" style="display:none;" title="">
+            📡 <span id="badge-cobertura-pct"></span>%
+          </span>
+          <!-- >>> FIM TEMP-COBERTURA-SOLIS <<< -->
         </span>
-        <!-- >>> FIM TEMP-COBERTURA-SOLIS <<< -->
+        <div class="cb-track"><div class="cb-fill fill-geracao" id="ce-bar-geracao"></div></div>
+        <span class="cb-valor" id="ce-val-geracao">—</span>
       </div>
-      <div class="ce-valor" id="ce-val-geracao">— <small>kWh</small></div>
-      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-geracao"></div></div>
-    </div>
-    <div class="card-energia ce-consumo">
-      <div class="ce-topo">🏠 <span>Consumo</span></div>
-      <div class="ce-valor" id="ce-val-consumo">— <small>kWh</small></div>
-      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-consumo"></div></div>
-    </div>
-    <div class="card-energia ce-injetada">
-      <div class="ce-topo">⬆️ <span>Injetada</span></div>
-      <div class="ce-valor" id="ce-val-injetada">— <small>kWh</small></div>
-      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-injetada"></div></div>
-    </div>
-    <div class="card-energia ce-importada">
-      <div class="ce-topo">⬇️ <span>Importada</span></div>
-      <div class="ce-valor" id="ce-val-importada">— <small>kWh</small></div>
-      <div class="ce-bar-track"><div class="ce-bar-fill" id="ce-bar-importada"></div></div>
+
+      <div class="cb-linha" data-metrica="consumo">
+        <span class="cb-icone">💡</span>
+        <span class="cb-label">Consumo</span>
+        <div class="cb-track"><div class="cb-fill fill-consumo" id="ce-bar-consumo"></div></div>
+        <span class="cb-valor" id="ce-val-consumo">—</span>
+      </div>
+
+      <div class="cb-linha" data-metrica="injetada">
+        <span class="cb-icone">🔌</span>
+        <span class="cb-label">Injetada</span>
+        <div class="cb-track"><div class="cb-fill fill-injetada" id="ce-bar-injetada"></div></div>
+        <span class="cb-valor" id="ce-val-injetada">—</span>
+      </div>
+
+      <div class="cb-linha" data-metrica="importada">
+        <span class="cb-icone">📉</span>
+        <span class="cb-label">Importada</span>
+        <div class="cb-track"><div class="cb-fill fill-importada" id="ce-bar-importada"></div></div>
+        <span class="cb-valor" id="ce-val-importada">—</span>
+      </div>
     </div>
   </div>
 </div><!-- /fluxo-wrapper -->
@@ -1163,36 +1190,38 @@ function renderSemaforo() {
 async function atualizarCardsEnergia(controladorId) {
   try {
     const r = await fetch(`/api/energia/resumo_dia.php?controlador_id=${controladorId}`, { credentials: 'same-origin' });
-    const j = await r.json();
-    if (!j.sucesso) return;
+    const data = await r.json();
+    if (!data.sucesso) return;
 
-    const e = j.energia_kwh || {};
+    const e = data.energia_kwh || {};
+
     const metricas = {
       geracao:   e.geracao   ?? 0,
       consumo:   e.consumo   ?? 0,
-      injetada:  e.exportada ?? 0,
-      importada: e.importada ?? 0
+      injetada:  e.exportada ?? 0,   // exportada -> injetada
+      importada: e.importada ?? 0,
     };
 
-    const maxVal = Math.max(...Object.values(metricas), 0.001);
+    // maior valor = 100% da barra (escala relativa)
+    const max = Math.max(...Object.values(metricas), 1);
 
-    for (const [k, v] of Object.entries(metricas)) {
-      const val = Number(v) || 0;
-      const elVal = document.getElementById(`ce-val-${k}`);
-      const elBar = document.getElementById(`ce-bar-${k}`);
-      if (elVal) elVal.innerHTML = `${val.toFixed(1)} <small>kWh</small>`;
-      if (elBar) elBar.style.width = `${Math.min(100, (val / maxVal) * 100).toFixed(1)}%`;
+    for (const [chave, valor] of Object.entries(metricas)) {
+      const pct = (valor / max) * 100;
+      const bar = document.getElementById(`ce-bar-${chave}`);
+      const val = document.getElementById(`ce-val-${chave}`);
+      if (bar) bar.style.width = `${pct.toFixed(1)}%`;
+      if (val) val.textContent = `${Number(valor).toLocaleString('pt-BR', {maximumFractionDigits:1})} kWh`;
     }
 
     // >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
-    if (j.cobertura_geracao) {
+    const cob = data.cobertura_geracao;
+    if (cob) {
       const badge = document.getElementById('badge-cobertura');
-      const badgePct = document.getElementById('badge-cobertura-pct');
-      if (badge && badgePct) {
+      if (badge) {
         badge.style.display = 'inline-block';
-        badge.className = `badge-cobertura badge-${j.cobertura_geracao.status}`;
-        badge.title = j.cobertura_geracao.aviso || '';
-        badgePct.textContent = j.cobertura_geracao.pct;
+        badge.className = `badge-cobertura badge-${cob.status}`;
+        badge.title = cob.aviso || '';
+        document.getElementById('badge-cobertura-pct').textContent = cob.pct;
       }
     }
     // >>> FIM TEMP-COBERTURA-SOLIS <<<
@@ -1710,6 +1739,29 @@ verificarToken()
     } else {
       iniciar();
     }
+  })();
+
+  // ===== PARALLAX: diagrama some/encolhe conforme rola =====
+  (function initParallaxDiagrama() {
+    const host = document.getElementById('infografico-host');
+    const wrapper = document.querySelector('.fluxo-wrapper');
+    if (!host || !wrapper) return;
+
+    let ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const rect = wrapper.getBoundingClientRect();
+        // progresso 0 (topo) -> 1 (rolou 1 viewport)
+        const progresso = Math.min(Math.max(-rect.top / (window.innerHeight * 0.6), 0), 1);
+        host.style.opacity = (1 - progresso * 0.85).toFixed(2);   // 1 -> 0.15
+        host.style.transform = `scale(${1 - progresso * 0.08})`;  // leve recuo
+        ticking = false;
+      });
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
   })();
   </script>
 </body>

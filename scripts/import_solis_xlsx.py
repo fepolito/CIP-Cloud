@@ -7,6 +7,11 @@
 # @autor: Antigravity
 # ============================================================
 
+# @premissa: idempotente por design (apenas UPDATE por id, sem INSERT).
+#            Linhas de 5min sao criadas previamente pelo upload CIP/Copilot.
+#            SQL de prod casa por 'id' via reconciliacao/interpolacao dev<->prod.
+#            SOLUCAO PALIATIVA ate integracao direta (API/conexao inversor).
+
 import argparse
 import pandas as pd
 import numpy as np
