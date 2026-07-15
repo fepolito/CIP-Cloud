@@ -104,9 +104,10 @@ try {
         SELECT 
           COALESCE(MAX(energia_importada_kwh) - MIN(energia_importada_kwh), 0) AS importada_kwh,
           COALESCE(MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh), 0) AS exportada_kwh,
-          COALESCE(MAX(energia_geracao_kwh)   - MIN(energia_geracao_kwh),   0) AS geracao_kwh,
+          COALESCE(SUM(energia_geracao_kwh), 0) AS geracao_kwh,
           COALESCE(
-            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) -
+            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
+            COALESCE(SUM(energia_geracao_kwh), 0) -
             (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)),
             0
           ) AS consumo_kwh,

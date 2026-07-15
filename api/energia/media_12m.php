@@ -109,8 +109,9 @@ try {
             DATE_FORMAT(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str), '%Y-%m') AS mes_ref,
             MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_kwh,
             MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_kwh,
-            MAX(energia_geracao_kwh)   - MIN(energia_geracao_kwh)   AS geracao_kwh,
-            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) -
+            COALESCE(SUM(energia_geracao_kwh), 0)   AS geracao_kwh,
+            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
+            COALESCE(SUM(energia_geracao_kwh), 0) -
             (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_kwh
           FROM telemetria_5min
           WHERE controlador_id = :cid
@@ -149,7 +150,8 @@ try {
     $sqlMesCorrente = "
         SELECT 
           COALESCE(
-            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) -
+            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
+            COALESCE(SUM(energia_geracao_kwh), 0) -
             (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)),
             0
           ) AS consumo_parcial_kwh
