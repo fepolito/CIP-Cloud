@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.17.4
+ * @versao        1.18.0
  * @modificado_em 2026-07-18
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -95,6 +95,8 @@
  *   2026-07-15  v1.15.1  Fix stacking: cards ficavam atrás do infografico (z-index:-1 furava). isolation:isolate + z-index positivo.
  *   2026-07-17  v1.17.2  [FIX] Correção syntax error (chave órfã) + Modo TV minimalista SVG + Fix persistência seletor.
  *   2026-07-17  v1.17.3  [FIX] Restauração do card-energia (Balanço Energético) após Hipótese B.
+ *   2026-07-18  v1.18.0  [ADD] Card economia (Lei 14.300) em #cards-host,
+ *                        carona no ciclo 10s, badge fator_injecao. CIP-DEC-20260718-012
  * ============================================================
  */
 
@@ -468,6 +470,46 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       border: 1px solid var(--card-border, rgba(255,255,255,0.08));
       border-radius: 14px;
     }
+
+    /* ══════════════════════════════════════════════
+       CARD ECONOMIA (CIP-DEC-20260718-012)
+    ══════════════════════════════════════════════ */
+    .card-economia { margin-top: 16px; }
+
+    .card-economia .eco-fator {
+      float: right; font-size: 10px; font-weight: 700;
+      color: var(--green); background: rgba(0,230,118,.12);
+      padding: 2px 8px; border-radius: 12px; letter-spacing: .5px;
+    }
+
+    .card-economia .ce-total {
+      display: flex; flex-direction: column;
+      margin-bottom: 16px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-economia .ce-total-val {
+      font-size: clamp(24px, 5vw, 34px);
+      font-weight: 800; line-height: 1;
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+    }
+    .card-economia .ce-total-sub {
+      color: var(--txt-dim); font-size: 11px; margin-top: 6px;
+      letter-spacing: .5px; text-transform: uppercase; font-weight: 700;
+    }
+
+    .card-economia .ce-linha {
+      display: grid;
+      grid-template-columns: 28px 1fr 110px;
+      align-items: center; gap: 10px;
+      margin-bottom: 12px; color: var(--txt);
+    }
+    .card-economia .ce-linha:last-child { margin-bottom: 0; }
+
+    .card-economia[data-loading="true"]  .cb-valor,
+    .card-economia[data-loading="true"]  .ce-total-val { opacity: .35; }
+    .card-economia[data-loading="error"] .ce-total-val { color: var(--red); }
+
     .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--fg, #eef2f7); }
     .cb-titulo small { font-weight: 400; opacity: .6; }
 
@@ -986,6 +1028,31 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <span class="cb-valor" id="ce-val-importada">—</span>
       </div>
     </div>
+
+    <!-- ── Card Economia (Lei 14.300) — CIP-DEC-20260718-012 ── -->
+    <div class="card-economia card-barras" id="cardEconomia" data-loading="true">
+      <h3 class="cb-titulo">
+        💰 Economia do Dia
+        <small>(Lei 14.300)</small>
+        <span class="eco-fator" id="eco-fator" title="Fator de injeção vigente"></span>
+      </h3>
+
+      <div class="ce-total">
+        <span class="ce-total-val" id="eco-total">—</span>
+        <span class="ce-total-sub" id="eco-total-sub">estimativa hoje</span>
+      </div>
+
+      <div class="ce-linha">
+        <span class="cb-icone">☀️</span>
+        <span class="cb-label">Autoconsumo</span>
+        <span class="cb-valor" id="eco-autoconsumo">—</span>
+      </div>
+      <div class="ce-linha">
+        <span class="cb-icone">🔁</span>
+        <span class="cb-label">Crédito injeção</span>
+        <span class="cb-valor" id="eco-credito">—</span>
+      </div>
+    </div>
   </div>
 
 </div><!-- /wrap -->
@@ -1086,6 +1153,50 @@ async function atualizarCardsEnergia(controladorId) {
   }
 }
 
+/**
+ * Card economia (Lei 14.300) — consome api/energia/economia.php.
+ * Carona no ciclo de 10s via carregarKpis(). Método: simplificado_v1.
+ */
+async function atualizarCardEconomia(controladorId) {
+  const card = document.getElementById('cardEconomia');
+  if (!card) return;
+  try {
+    const r = await fetch(
+      `/api/energia/economia.php?controlador_id=${controladorId}`,
+      { credentials: 'same-origin' }
+    );
+    const j = await r.json();
+    if (!j.sucesso) throw new Error(j.erro || 'falha');
+
+    const d = j.data;
+    const brl = (v) => Number(v || 0)
+      .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    document.getElementById('eco-total').textContent       = brl(d.total);
+    document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_reais);
+    document.getElementById('eco-credito').textContent     = brl(d.credito_reais);
+
+    // Sub-info honesta: kWh exportados que geraram o crédito
+    const sub = document.getElementById('eco-total-sub');
+    if (sub && d.exportada_kwh != null) {
+      const kwh = Number(d.exportada_kwh).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+      sub.textContent = `estimativa hoje · ${kwh} kWh injetados`;
+    }
+
+    // Badge fator de injeção (Lei 14.300)
+    const fator = document.getElementById('eco-fator');
+    if (fator && d.fator_injecao != null) {
+      fator.textContent = `fator ${(d.fator_injecao * 100).toFixed(0)}%`;
+    }
+
+    card.dataset.loading = 'false';
+  } catch (err) {
+    console.error('[card-economia]', err);
+    card.dataset.loading = 'error';
+    document.getElementById('eco-total').textContent = '—';
+  }
+}
+
 /** * carregarKpis() — versao simplificada do antigo carregar()
  * Mantem o consumo de /api/dashboard/dados.php (legado) mas
  * atualiza APENAS os 9 KPIs do topo. Series temporais, gauge
@@ -1124,6 +1235,7 @@ async function carregarKpis() {
 
       window._dadosControlador = controlador;
       if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
+      if (typeof atualizarCardEconomia === 'function') atualizarCardEconomia(CTRL_ID);
     }
 
     document.getElementById('refreshInfo').textContent =
