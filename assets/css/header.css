@@ -16,6 +16,7 @@
  *                        sobrescreviam app.css (body bg, font, etc.)
  *                        Drawer bg usa var(--color-surface, #ffffff)
  *                        para respeitar tema do projeto.
+ *   2026-07-18  v2.1.1  Patch do seletor mobile e truncamento.
  * ============================================================ */
 
 /* ── Header fixo ─────────────────────────────────────────── */
@@ -324,3 +325,15 @@ body.drawer-open {
 @media (max-width: 400px) {
     .ctrl-pill-name { display: none; }
 }
+
+/* --- Ajuste Mobile Seletor --- */
+.ctrl-global-wrapper { min-width: 0; max-width: 55vw; }
+.sel-ctrl {
+  max-width: 100%; min-width: 0 !important;
+  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+}
+@media (max-width: 480px) {
+  .ctrl-global-wrapper { max-width: 45vw; margin-right: 8px !important; }
+  .sel-ctrl { font-size: 13px; padding: 5px 10px; }
+}
+

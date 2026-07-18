@@ -24,8 +24,10 @@
  *                        hambúrguer. Corrigido id 'dashboard'
  *                        para bater com $appPaginaAtual das páginas.
  *   2026-06-07  vB1.0.0  Patch B1: portado padrao multi-tenant de energia.php
- *                        (Tenant::filtroSQL, $controladorAtivo, persistencia
- *                        em $_SESSION). Adicionado seletor pill.
+ *   2026-07-18  vB1.1.0  Patch CIP-DEC-20260718-001 (Forçar UTC no ping) e
+ *                        Ajuste do seletor p/ mobile.
+ *   2026-07-18  vB1.2.0  Patch CIP-DEC-20260718-002: Status derivado da
+ *                        telemetria (MAX timestamp) ao invés do ping.
  * ============================================================
  */
 
@@ -127,7 +129,20 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
     <?php if ($mostrarPill): ?>
         <div class="ctrl-global-wrapper" style="margin-right: 15px; display: flex; align-items: center; gap: 8px;">
             <?php
-            $idadePing = isset($controladorAtivo['ultimo_ping']) ? time() - strtotime($controladorAtivo['ultimo_ping']) : 999999;
+            // --- Semáforo derivado da telemetria (fonte da verdade) ---
+            $idadePing = 999999;
+            if (!empty($controladorAtivo['id'])) {
+                $stmtPing = $pdo->prepare(
+                    "SELECT TIMESTAMPDIFF(SECOND, MAX(timestamp_utc), UTC_TIMESTAMP()) AS idade
+                     FROM telemetria_5min
+                     WHERE controlador_id = :id"
+                );
+                $stmtPing->execute([':id' => (int) $controladorAtivo['id']]);
+                $idade = $stmtPing->fetchColumn();
+                if ($idade !== null && $idade !== false) {
+                    $idadePing = (int) $idade;
+                }
+            }
             $semIcon = '🔴'; $semTitle = 'Offline';
             if ($idadePing < 300) { $semIcon = '🟢'; $semTitle = 'Online'; }
             elseif ($idadePing < 900) { $semIcon = '🟡'; $semTitle = 'Atrasado'; }
@@ -138,8 +153,9 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
                 <select id="sel-controlador-global" class="sel-ctrl" onchange="trocarControlador(this.value)" style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); color: var(--color-text, #0f172a); padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; outline: none; cursor: pointer; min-width: 150px;">
                     <option value="" disabled>Selecione um controlador...</option>
                     <?php foreach ($controladoresAcessiveis as $c): ?>
-                        <option value="<?php echo $c['id']; ?>" <?php echo $c['id'] == $controladorAtivo['id'] ? 'selected' : ''; ?>>
-                            <?php echo e($c['codigo'] . ($c['apelido'] ? ' — ' . $c['apelido'] : '')); ?>
+                        <option value="<?php echo $c['id']; ?>" <?php echo $c['id'] == $controladorAtivo['id'] ? 'selected' : ''; ?>
+                                title="<?php echo e($c['codigo'] . ($c['apelido'] ? ' — ' . $c['apelido'] : '')); ?>">
+                            <?php echo e($c['apelido'] ?: $c['codigo']); ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
