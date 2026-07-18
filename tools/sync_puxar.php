@@ -265,6 +265,14 @@ function gravarLote(PDO $pdo, string $tabela, array $registros, array $cfg, arra
             // Bind seguro
             foreach ($colunas as $c) {
                 $valor = $reg[$c] ?? null;
+                
+                // Fallbacks para colunas NOT NULL inseridas recentemente
+                if ($valor === null) {
+                    if ($c === 'controle_versao') $valor = 0;
+                    if ($c === 'controle_exportacao_ativo') $valor = 0;
+                    if ($c === 'modo_controle') $valor = 'desativado';
+                }
+
                 $stmt->bindValue(':' . $c, $valor, paramTypeFor($valor));
             }
             $stmt->execute();

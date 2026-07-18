@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.17.3
- * @modificado_em 2026-07-17
+ * @versao        1.17.4
+ * @modificado_em 2026-07-18
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
@@ -1113,12 +1113,16 @@ async function carregarKpis() {
 
       const diff     = controlador.ultimo_ping
         ? (Date.now() - new Date(controlador.ultimo_ping).getTime()) / 1000 : 999;
-      const isOnline = diff < SEM.OFFLINE_S;
-      //.className  = `kpi-status-pill ${isOnline ? 'online' : 'offline'}`;
-      //.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+      const isOnline = diff < 30; // limiar offline 30s (padrao CIP)
+
+      const pill = document.getElementById('statusPill');
+      if (pill) {
+        pill.className = `pill ${isOnline ? 'online' : 'offline'}`;
+        const txt = document.getElementById('statusTxt');
+        if (txt) txt.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+      }
 
       window._dadosControlador = controlador;
-      // if (typeof renderSemaforo === 'function') renderSemaforo();
       if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
     }
 
