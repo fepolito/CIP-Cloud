@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.15.1
- * @modificado_em 2026-07-15
+ * @versao        1.17.3
+ * @modificado_em 2026-07-17
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
@@ -93,6 +93,8 @@
  *   2026-07-15  v1.15.0  Infografico -> background fixo; cards 2x2 (resumo_dia.php);
  *                        fix semaforo (fluxo via resumo_dia, idade via dados.php) [CIP-DEC-20260715-001]
  *   2026-07-15  v1.15.1  Fix stacking: cards ficavam atrás do infografico (z-index:-1 furava). isolation:isolate + z-index positivo.
+ *   2026-07-17  v1.17.2  [FIX] Correção syntax error (chave órfã) + Modo TV minimalista SVG + Fix persistência seletor.
+ *   2026-07-17  v1.17.3  [FIX] Restauração do card-energia (Balanço Energético) após Hipótese B.
  * ============================================================
  */
 
@@ -128,28 +130,37 @@ $stmt = $pdo->prepare($sqlCtrls);
 $stmt->execute();
 $controladoresAcessiveis = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$ctrlSolicitado = isset($_GET['ctrl']) ? (int)$_GET['ctrl'] : null;
-$ctrlPadrao     = $_SESSION['controlador_padrao'] ?? null;
-
-$estadoA = (!$ctrlSolicitado && !$ctrlPadrao);
+$ctrlSolicitado = filter_input(INPUT_GET, 'ctrl', FILTER_VALIDATE_INT) ?: null;
+$ctrlPadrao     = isset($_SESSION['controlador_padrao']) ? (int) $_SESSION['controlador_padrao'] : null;
 
 $controladorAtivo = null;
-foreach ($controladoresAcessiveis as $c) {
-    if ($ctrlSolicitado && $c['id'] == $ctrlSolicitado) { $controladorAtivo = $c; break; }
-}
-if (!$controladorAtivo && $ctrlPadrao) {
+
+// 1) ?ctrl tem prioridade — só se pertencer ao tenant
+if ($ctrlSolicitado !== null) {
     foreach ($controladoresAcessiveis as $c) {
-        if ($c['id'] == $ctrlPadrao) { $controladorAtivo = $c; break; }
+        if ((int) $c['id'] === $ctrlSolicitado) { $controladorAtivo = $c; break; }
     }
 }
-if (!$controladorAtivo && !empty($controladoresAcessiveis)) {
+
+// 2) fallback: controlador salvo na sessão (revalidado no tenant)
+if ($controladorAtivo === null && $ctrlPadrao !== null) {
+    foreach ($controladoresAcessiveis as $c) {
+        if ((int) $c['id'] === $ctrlPadrao) { $controladorAtivo = $c; break; }
+    }
+}
+
+// 3) fallback: assume o primeiro da lista incondicionalmente (paridade total c/ energia.php)
+if ($controladorAtivo === null && !empty($controladoresAcessiveis)) {
     $controladorAtivo = $controladoresAcessiveis[0];
 }
 
-if ($ctrlSolicitado && $controladorAtivo) {
+// 4) persiste SEMPRE que houver ativo válido
+if ($controladorAtivo !== null) {
     $_SESSION['controlador_padrao'] = (int) $controladorAtivo['id'];
-    $estadoA = false;
 }
+
+// 5) estadoA = precisa escolher: nenhum ativo E há mais de um para decidir
+$estadoA = ($controladorAtivo === null && count($controladoresAcessiveis) > 1);
 
 $appTituloPagina = 'Dashboard';
 $appPaginaAtual  = 'dashboard';
@@ -630,6 +641,13 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       font-style: italic;
     }
 
+    /* ── Modo Minimalista (TV) ─────────────────── */
+    .infografico-minimal .no-valor,
+    .infografico-minimal .no-mini-lbl,
+    .infografico-minimal .no-sub {
+      display: none;
+    }
+
     .no-mini-lbl {
       fill: var(--txt-dim);
       font-size: 9px;
@@ -789,7 +807,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
        consumindo api/dashboard/infografico.php.
   ════════════════════════════════════════════════════════ -->
   <div class="fluxo-wrapper">
-  <div id="infografico-host" class="infografico-wrap">
+  <div id="infografico-host" class="infografico-wrap infografico-minimal">
 
     <!-- Cabecalho do bloco -->
     <div class="infografico-head">
@@ -878,6 +896,14 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa" x="0" y="0" width="160" height="180" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">⚡</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">REDE</text>
+          
+          <text class="no-mini-lbl" x="80" y="82" text-anchor="middle">IMPORTAÇÃO</text>
+          <text class="no-valor vermelho" x="80" y="104" text-anchor="middle" id="valImportada">— kW</text>
+          <text class="no-sub" x="80" y="118" text-anchor="middle" id="valImportadaDia">— kWh hoje</text>
+
+          <text class="no-mini-lbl" x="80" y="142" text-anchor="middle">EXPORTAÇÃO</text>
+          <text class="no-valor azul" x="80" y="164" text-anchor="middle" id="valExportada">— kW</text>
+          <text class="no-sub" x="80" y="178" text-anchor="middle" id="valExportadaDia">— kWh hoje</text>
         </g>
 
         <!-- No: IMOVEL (central) -->
@@ -885,6 +911,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa destaque" x="0" y="0" width="200" height="180" rx="16"/>
           <text class="no-emoji"  x="100" y="42" text-anchor="middle">🏠</text>
           <text class="no-titulo" x="100" y="66" text-anchor="middle">IMOVEL</text>
+          
+          <text class="no-valor" x="100" y="96" text-anchor="middle" id="valConsumo">— kW</text>
+          <text class="no-sub" x="100" y="114" text-anchor="middle" id="valConsumoDia">— kWh hoje</text>
+          
+          <text class="no-mini-lbl amarelo" x="100" y="146" text-anchor="middle">SALDO (GERAÇÃO - CONSUMO)</text>
+          <text class="no-valor sm" x="100" y="166" text-anchor="middle" id="valSaldo">—</text>
         </g>
 
         <!-- No: BATERIA (standby) -->
@@ -892,6 +924,8 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <rect class="no-caixa" x="0" y="0" width="160" height="150" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">🔋</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">BATERIA</text>
+          <text class="no-valor cinza" x="80" y="94" text-anchor="middle" id="valBateria">— kW</text>
+          <text class="no-sub" x="80" y="118" text-anchor="middle" id="valBateriaDia">— kWh hoje</text>
         </g>
 
       </svg>
@@ -953,7 +987,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       </div>
     </div>
   </div>
-</div><!-- /fluxo-wrapper -->
 
 </div><!-- /wrap -->
 
@@ -1047,7 +1080,7 @@ async function atualizarCardsEnergia(controladorId) {
     }
     // >>> FIM TEMP-COBERTURA-SOLIS <<<
 
-    aplicarSemaforoFluxo(j);
+    // aplicarSemaforoFluxo(j); // Removido
   } catch (err) {
     console.error('[cards-energia]', err);
   }
@@ -1077,12 +1110,6 @@ async function carregarKpis() {
       const nomeCtrl = controlador.nome || `Controlador #${CTRL_ID}`;
       const nomeEl = document.getElementById('nomeCtrl');
       if (nomeEl) nomeEl.textContent = nomeCtrl;
-      document.getElementById('nomeCtrlKpi').textContent = nomeCtrl;
-      document.getElementById('tLoc').textContent        = controlador.localizacao || '—';
-
-      const pingStr = controlador.ultimo_ping
-        ? new Date(controlador.ultimo_ping).toLocaleString('pt-BR') : '—';
-      document.getElementById('tPing').textContent = `Último ping: ${pingStr}`;
 
       const diff     = controlador.ultimo_ping
         ? (Date.now() - new Date(controlador.ultimo_ping).getTime()) / 1000 : 999;
@@ -1091,7 +1118,7 @@ async function carregarKpis() {
       //.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
 
       window._dadosControlador = controlador;
-      if (typeof renderSemaforo === 'function') //;
+      // if (typeof renderSemaforo === 'function') renderSemaforo();
       if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
     }
 
