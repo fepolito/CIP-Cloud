@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.7
+ * @versao        1.18.8
  * @modificado_em 2026-07-19
  * @objetivo      Dashboard de monitoramento de energia (KPIs + nós minimalistas SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -742,10 +742,20 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     .fluxo-grupo[data-fluxo="exportada"] .fluxo-ativo {
       animation-name: fluxo-mover-exportada;
     }
-    .fluxo-grupo.fluxo-standby .fluxo-ativo {
-      opacity: .25;
+    .fluxo-grupo.fluxo-on .fluxo-ativo {
+      opacity: 1;
       animation: fluxo-mover 2s linear infinite;
     }
+
+    /* ===== Bullets Luminosos ===== */
+    .bullet {
+      filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 7px currentColor);
+      transition: opacity .35s ease;
+    }
+    .b-geracao   { fill: #fbbf24; color: #fbbf24; }
+    .b-importada { fill: #ef4444; color: #ef4444; }
+    .b-exportada { fill: #22c55e; color: #22c55e; }
+    .bullet-off  { opacity: 0; }   /* NUNCA display:none — pararia o animateMotion */
 
     .no-grupo.sem-dado .no-caixa {
       stroke-dasharray: 4 4;
@@ -898,25 +908,37 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <g class="fluxo-grupo" data-fluxo="geracao">
           <path class="fluxo-trilho"
                 d="M 500,150 C 500,180 500,200 500,230"/>
-          <path class="fluxo-ativo amarelo"
+          <path id="pathGeracao" class="fluxo-ativo amarelo"
                 d="M 500,150 C 500,180 500,200 500,230"/>
         </g>
+        <!-- === BULLETS GERACAO === -->
+        <circle class="bullet b-geracao" data-bullet="geracao" data-idx="0" r="5"><animateMotion id="animGeracao0" dur="2s" begin="0s"     repeatCount="indefinite" rotate="auto"><mpath href="#pathGeracao"/></animateMotion></circle>
+        <circle class="bullet b-geracao" data-bullet="geracao" data-idx="1" r="5"><animateMotion id="animGeracao1" dur="2s" begin="-0.66s" repeatCount="indefinite" rotate="auto"><mpath href="#pathGeracao"/></animateMotion></circle>
+        <circle class="bullet b-geracao" data-bullet="geracao" data-idx="2" r="5"><animateMotion id="animGeracao2" dur="2s" begin="-1.33s" repeatCount="indefinite" rotate="auto"><mpath href="#pathGeracao"/></animateMotion></circle>
 
         <!-- Fluxo 2: Rede -> Imovel (horizontal, esquerda) -->
         <g class="fluxo-grupo" data-fluxo="importada">
           <path class="fluxo-trilho"
                 d="M 200,335 C 280,335 340,335 400,335"/>
-          <path class="fluxo-ativo vermelho"
+          <path id="pathImportada" class="fluxo-ativo vermelho"
                 d="M 200,335 C 280,335 340,335 400,335"/>
         </g>
+        <!-- === BULLETS IMPORTADA === -->
+        <circle class="bullet b-importada" data-bullet="importada" data-idx="0" r="5"><animateMotion id="animImportada0" dur="2s" begin="0s"     repeatCount="indefinite" rotate="auto"><mpath href="#pathImportada"/></animateMotion></circle>
+        <circle class="bullet b-importada" data-bullet="importada" data-idx="1" r="5"><animateMotion id="animImportada1" dur="2s" begin="-0.66s" repeatCount="indefinite" rotate="auto"><mpath href="#pathImportada"/></animateMotion></circle>
+        <circle class="bullet b-importada" data-bullet="importada" data-idx="2" r="5"><animateMotion id="animImportada2" dur="2s" begin="-1.33s" repeatCount="indefinite" rotate="auto"><mpath href="#pathImportada"/></animateMotion></circle>
 
         <!-- Fluxo 3: Imovel -> Rede (horizontal, esquerda, abaixo) -->
         <g class="fluxo-grupo" data-fluxo="exportada">
           <path class="fluxo-trilho"
                 d="M 400,335 C 340,335 280,335 200,335"/>
-          <path class="fluxo-ativo verde"
+          <path id="pathExportada" class="fluxo-ativo verde"
                 d="M 400,335 C 340,335 280,335 200,335"/>
         </g>
+        <!-- === BULLETS EXPORTADA === -->
+        <circle class="bullet b-exportada" data-bullet="exportada" data-idx="0" r="5"><animateMotion id="animExportada0" dur="2s" begin="0s"     repeatCount="indefinite" rotate="auto"><mpath href="#pathExportada"/></animateMotion></circle>
+        <circle class="bullet b-exportada" data-bullet="exportada" data-idx="1" r="5"><animateMotion id="animExportada1" dur="2s" begin="-0.66s" repeatCount="indefinite" rotate="auto"><mpath href="#pathExportada"/></animateMotion></circle>
+        <circle class="bullet b-exportada" data-bullet="exportada" data-idx="2" r="5"><animateMotion id="animExportada2" dur="2s" begin="-1.33s" repeatCount="indefinite" rotate="auto"><mpath href="#pathExportada"/></animateMotion></circle>
 
         <!-- Fluxo 4: Imovel <-> Bateria (horizontal, direita) -->
         <g class="fluxo-grupo fluxo-standby" data-fluxo="bateria">
@@ -1513,6 +1535,45 @@ verificarToken()
     }
 
     /* ───────── Aplicacao principal: payload -> DOM ───────── */
+    /* ===== Bullets luminosos do fluxo (velocidade + qtd ∝ potência) ===== */
+    const BULLET_LIMIAR_KW = 0.03;                    // 30 W
+    const BULLET_DUR_MIN = 0.6, BULLET_DUR_MAX = 4;
+    const BULLET_P_MAX = 10;                           // kW
+    const BULLET_MAX = 3;
+
+    function bulletDur(kw) {
+      const p = Math.min(Math.abs(kw), BULLET_P_MAX);
+      return (BULLET_DUR_MIN + (BULLET_DUR_MAX - BULLET_DUR_MIN) * (1 - p / BULLET_P_MAX)).toFixed(2) + 's';
+    }
+    function bulletQtd(kw) {
+      const p = Math.min(Math.abs(kw), BULLET_P_MAX);
+      return Math.max(1, Math.ceil(BULLET_MAX * (p / BULLET_P_MAX)));
+    }
+    function renderBullets(fluxo, kw) {
+      const circles = document.querySelectorAll(`.bullet[data-bullet="${fluxo}"]`);
+      if (!circles.length) return;
+      const ativo = Math.abs(kw) >= BULLET_LIMIAR_KW;
+      const qtd   = ativo ? bulletQtd(kw) : 0;
+      const dur   = bulletDur(kw);
+      const cap   = fluxo.charAt(0).toUpperCase() + fluxo.slice(1);
+      circles.forEach((c) => {
+        const idx  = Number(c.dataset.idx);
+        const anim = document.getElementById(`anim${cap}${idx}`);
+        if (idx < qtd) {
+          c.classList.remove('bullet-off');
+          if (anim && anim.getAttribute('dur') !== dur) anim.setAttribute('dur', dur);
+        } else {
+          c.classList.add('bullet-off');
+        }
+      });
+    }
+    function atualizarBullets(kw) {
+      renderBullets('geracao',   kw.geracao || 0);
+      const imp = kw.importada || 0, exp = kw.exportada || 0;
+      renderBullets('importada', imp > exp ? imp : 0);
+      renderBullets('exportada', exp > imp ? exp : 0);
+    }
+
     function aplicarDados(p) {
       if (!p || !p.success) return;
 
@@ -1541,6 +1602,13 @@ verificarToken()
       renderCaixaHibrida(refs.importadaDia, refs.importada, energiaDia.importada_kwh, f.importada_w, { modo: 'neutro', aviso: energiaDia.aviso });
       renderCaixaHibrida(refs.exportadaDia, refs.exportada, energiaDia.exportada_kwh, f.exportada_w, { modo: 'injecao', aviso: energiaDia.aviso });
       renderCaixaHibrida(refs.consumoDia, refs.consumo, energiaDia.consumo_total_kwh, f.consumo_total_w, { modo: 'consumo', aviso: energiaDia.aviso });
+
+      // ✨ Bullets de fluxo (W → kW)
+      atualizarBullets({
+        geracao:   (f.exportada_w /* TODO(inversor): f.geracao_w */ ?? 0) / 1000,
+        importada: (f.importada_w ?? 0) / 1000,
+        exportada: (f.exportada_w ?? 0) / 1000,
+      });
 
       // Saldo: exportada - importada (positivo = exportando para rede)
       const saldoWatts = (Number(f.exportada_w) || 0) - (Number(f.importada_w) || 0);
