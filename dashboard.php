@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.5
+ * @versao        1.18.6
  * @modificado_em 2026-07-19
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -728,10 +728,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       animation: none;
       filter: url(#glow);
     }
-    .fluxo-ativo.verde   { stroke: var(--green);   }
-    .fluxo-ativo.amarelo { stroke: var(--yellow);  }
-    .fluxo-ativo.azul    { stroke: var(--blue);    }
-    .fluxo-ativo.cinza   { stroke: var(--txt-dim); }
+    .fluxo-ativo.amarelo  { stroke: #f5c542; }
+    .fluxo-ativo.azul     { stroke: #4a90d9; }
+    .fluxo-ativo.vermelho { stroke: #e05a5a; }
+    .fluxo-ativo.verde    { stroke: #4caf7d; }
+    .fluxo-ativo.laranja  { stroke: #e8944a; }
+    .fluxo-ativo.cinza    { stroke: #9aa0a6; }
 
     .fluxo-grupo.fluxo-on .fluxo-ativo {
       opacity: 1;
@@ -896,7 +898,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <g class="fluxo-grupo" data-fluxo="geracao">
           <path class="fluxo-trilho"
                 d="M 500,150 C 500,180 500,200 500,230"/>
-          <path class="fluxo-ativo verde"
+          <path class="fluxo-ativo amarelo"
                 d="M 500,150 C 500,180 500,200 500,230"/>
         </g>
 
@@ -904,7 +906,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <g class="fluxo-grupo" data-fluxo="importada">
           <path class="fluxo-trilho"
                 d="M 200,335 C 280,335 340,335 400,335"/>
-          <path class="fluxo-ativo amarelo"
+          <path class="fluxo-ativo vermelho"
                 d="M 200,335 C 280,335 340,335 400,335"/>
         </g>
 
@@ -912,7 +914,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <g class="fluxo-grupo" data-fluxo="exportada">
           <path class="fluxo-trilho"
                 d="M 400,335 C 340,335 280,335 200,335"/>
-          <path class="fluxo-ativo azul"
+          <path class="fluxo-ativo verde"
                 d="M 400,335 C 340,335 280,335 200,335"/>
         </g>
 
