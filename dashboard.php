@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.4
+ * @versao        1.18.5
  * @modificado_em 2026-07-19
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -661,10 +661,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       font-family: 'Segoe UI', system-ui, sans-serif;
     }
     .no-valor.sm { font-size: 14px; }
-    .no-valor.verde   { fill: var(--green);  }
-    .no-valor.amarelo { fill: var(--yellow); }
-    .no-valor.azul    { fill: var(--blue);   }
-    .no-valor.cinza   { fill: var(--txt-dim); letter-spacing: 1.5px; font-size: 13px; }
+    .no-valor.amarelo  { fill: #f5c542; }
+    .no-valor.azul     { fill: #4a90d9; }
+    .no-valor.vermelho { fill: #e05a5a; }
+    .no-valor.verde    { fill: #4caf7d; }
+    .no-valor.laranja  { fill: #e8944a; }
+    .no-valor.cinza    { fill: #9aa0a6; }
 
     .valor-energia {
       font-size: 18px;
@@ -928,9 +930,11 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
         <!-- No: MODULOS FOTOVOLTAICOS -->
         <g class="no-grupo" transform="translate(420, 30)">
-          <rect class="no-caixa" x="0" y="0" width="160" height="120" rx="14"/>
+          <rect class="no-caixa" x="0" y="0" width="160" height="150" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">☀️</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">MODULOS FV</text>
+          <text class="no-valor amarelo" x="80" y="94" text-anchor="middle" id="valGeracao">0.00 kW</text>
+          <text class="no-sub" x="80" y="118" text-anchor="middle" id="valGeracaoDia">— kWh</text>
         </g>
 
         <!-- No: REDE / CONCESSIONARIA -->
@@ -944,7 +948,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <text class="no-sub" x="80" y="118" text-anchor="middle" id="valImportadaDia">— kWh hoje</text>
 
           <text class="no-mini-lbl" x="80" y="142" text-anchor="middle">EXPORTAÇÃO</text>
-          <text class="no-valor azul" x="80" y="164" text-anchor="middle" id="valExportada">— kW</text>
+          <text class="no-valor verde" x="80" y="164" text-anchor="middle" id="valExportada">- kW</text>
           <text class="no-sub" x="80" y="178" text-anchor="middle" id="valExportadaDia">— kWh hoje</text>
         </g>
 
@@ -954,7 +958,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
           <text class="no-emoji"  x="100" y="42" text-anchor="middle">🏠</text>
           <text class="no-titulo" x="100" y="66" text-anchor="middle">IMOVEL</text>
           
-          <text class="no-valor" x="100" y="96" text-anchor="middle" id="valConsumo">— kW</text>
+          <text class="no-valor azul" x="100" y="96" text-anchor="middle" id="valConsumo">- kW</text>
           <text class="no-sub" x="100" y="114" text-anchor="middle" id="valConsumoDia">— kWh hoje</text>
           
           <text class="no-mini-lbl amarelo" x="100" y="146" text-anchor="middle">SALDO (GERAÇÃO - CONSUMO)</text>
@@ -1535,7 +1539,7 @@ verificarToken()
       const energiaDia = p.energia_dia || {};
 
       // ── Valores numericos e Hibridos ──
-      renderCaixaHibrida(refs.geracaoDia, refs.geracao, energiaDia.geracao_kwh, f.geracao_w, { modo: 'nd_if_null', aviso: energiaDia.aviso });
+      renderCaixaHibrida(refs.geracaoDia, refs.geracao, energiaDia.exportada_kwh, f.exportada_w /* TODO(inversor) */, { modo: 'nd_if_null', aviso: energiaDia.aviso });
       renderCaixaHibrida(refs.importadaDia, refs.importada, energiaDia.importada_kwh, f.importada_w, { modo: 'neutro', aviso: energiaDia.aviso });
       renderCaixaHibrida(refs.exportadaDia, refs.exportada, energiaDia.exportada_kwh, f.exportada_w, { modo: 'injecao', aviso: energiaDia.aviso });
       renderCaixaHibrida(refs.consumoDia, refs.consumo, energiaDia.consumo_total_kwh, f.consumo_total_w, { modo: 'consumo', aviso: energiaDia.aviso });
