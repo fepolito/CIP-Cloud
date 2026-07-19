@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.0
- * @modificado_em 2026-07-18
+ * @versao        1.18.2
+ * @modificado_em 2026-07-19
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
@@ -460,14 +460,14 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     #cards-host {
       position: relative;
       z-index: 1;                /* cards por cima ao rolar */
-      margin-top: 40vh;          /* empurra os cards p/ baixo -> diagrama aparece 1º */
+      margin-top: 260px;         /* era 40vh — agora casa com o SVG de 240px + 20px folga */
     }
 
     .card-barras {
       padding: 20px 24px;
-      background: var(--card-bg, rgba(20,24,33,0.72));
+      background: var(--card);
       backdrop-filter: blur(4px);
-      border: 1px solid var(--card-border, rgba(255,255,255,0.08));
+      border: 1px solid var(--border);
       border-radius: 14px;
     }
 
@@ -510,7 +510,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     .card-economia[data-loading="true"]  .ce-total-val { opacity: .35; }
     .card-economia[data-loading="error"] .ce-total-val { color: var(--red); }
 
-    .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--fg, #eef2f7); }
+    .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--txt); }
     .cb-titulo small { font-weight: 400; opacity: .6; }
 
     /* grid: ícone | label | barra (flexível) | valor */
@@ -520,7 +520,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       align-items: center;
       gap: 10px;
       margin-bottom: 14px;
-      color: var(--fg, #eef2f7);
+      color: var(--txt);
     }
     .cb-linha:last-child { margin-bottom: 0; }
 
@@ -529,9 +529,9 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
     /* >>> TEMP-COBERTURA-SOLIS <<< */
     .badge-cobertura { padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
-    .badge-ok      { background: #d1fae5; color: #065f46; }
-    .badge-parcial { background: #fef3c7; color: #92400e; }
-    .badge-critico { background: #fee2e2; color: #991b1b; }
+    .badge-ok      { background: rgba(0,230,118,.15);  color: var(--green);  }
+    .badge-parcial { background: rgba(255,193,7,.15);  color: var(--yellow); }
+    .badge-critico { background: rgba(255,82,82,.15);  color: var(--red);    }
     /* >>> FIM TEMP-COBERTURA-SOLIS <<< */
 
     .cb-track {
@@ -555,7 +555,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
     @media (max-width: 768px) {
       .cb-linha { grid-template-columns: 24px 80px 1fr 70px; gap: 6px; }
-      #cards-host { margin-top: 30vh; }
+      #cards-host { margin-top: 200px; }
     }
 
     .infografico-wrap {
