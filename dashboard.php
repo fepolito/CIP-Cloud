@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.2
+ * @versao        1.18.3
  * @modificado_em 2026-07-19
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -460,7 +460,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     #cards-host {
       position: relative;
       z-index: 1;                /* cards por cima ao rolar */
-      margin-top: 260px;         /* era 40vh — agora casa com o SVG de 240px + 20px folga */
+      margin-top: 16px;          /* O svg é sticky e já ocupa espaço na DOM */
     }
 
     .card-barras {
@@ -555,7 +555,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
     @media (max-width: 768px) {
       .cb-linha { grid-template-columns: 24px 80px 1fr 70px; gap: 6px; }
-      #cards-host { margin-top: 200px; }
+      #cards-host { margin-top: 16px; }
     }
 
     .infografico-wrap {
