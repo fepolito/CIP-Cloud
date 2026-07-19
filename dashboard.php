@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.3
+ * @versao        1.18.4
  * @modificado_em 2026-07-19
  * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -901,17 +901,17 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <!-- Fluxo 2: Rede -> Imovel (horizontal, esquerda) -->
         <g class="fluxo-grupo" data-fluxo="importada">
           <path class="fluxo-trilho"
-                d="M 200,310 C 280,310 340,310 400,310"/>
+                d="M 200,335 C 280,335 340,335 400,335"/>
           <path class="fluxo-ativo amarelo"
-                d="M 200,310 C 280,310 340,310 400,310"/>
+                d="M 200,335 C 280,335 340,335 400,335"/>
         </g>
 
         <!-- Fluxo 3: Imovel -> Rede (horizontal, esquerda, abaixo) -->
         <g class="fluxo-grupo" data-fluxo="exportada">
           <path class="fluxo-trilho"
-                d="M 400,360 C 340,360 280,360 200,360"/>
+                d="M 400,335 C 340,335 280,335 200,335"/>
           <path class="fluxo-ativo azul"
-                d="M 400,360 C 340,360 280,360 200,360"/>
+                d="M 400,335 C 340,335 280,335 200,335"/>
         </g>
 
         <!-- Fluxo 4: Imovel <-> Bateria (horizontal, direita) -->
