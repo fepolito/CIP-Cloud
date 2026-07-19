@@ -1,9 +1,9 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.6
+ * @versao        1.18.7
  * @modificado_em 2026-07-19
- * @objetivo      Dashboard de monitoramento de energia (KPIs + áreas reservadas para infográfico SVG e cards instantâneos)
+ * @objetivo      Dashboard de monitoramento de energia (KPIs + nós minimalistas SVG e cards instantâneos)
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
  * Dependências de hardware:
@@ -644,7 +644,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     }
 
     .no-emoji {
-      font-size: 26px;
+      font-size: 130px;
       dominant-baseline: middle;
     }
     .no-titulo {
@@ -932,7 +932,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
         <!-- No: MODULOS FOTOVOLTAICOS -->
         <g class="no-grupo" transform="translate(420, 30)">
-          <rect class="no-caixa" x="0" y="0" width="160" height="150" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">☀️</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">MODULOS FV</text>
           <text class="no-valor amarelo" x="80" y="94" text-anchor="middle" id="valGeracao">0.00 kW</text>
@@ -941,7 +940,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
         <!-- No: REDE / CONCESSIONARIA -->
         <g class="no-grupo" transform="translate(40, 250)">
-          <rect class="no-caixa" x="0" y="0" width="160" height="180" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">⚡</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">REDE</text>
           
@@ -956,7 +954,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
         <!-- No: IMOVEL (central) -->
         <g class="no-grupo" transform="translate(400, 230)">
-          <rect class="no-caixa destaque" x="0" y="0" width="200" height="180" rx="16"/>
           <text class="no-emoji"  x="100" y="42" text-anchor="middle">🏠</text>
           <text class="no-titulo" x="100" y="66" text-anchor="middle">IMOVEL</text>
           
@@ -969,7 +966,6 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
         <!-- No: BATERIA (standby) -->
         <g class="no-grupo standby" transform="translate(800, 245)">
-          <rect class="no-caixa" x="0" y="0" width="160" height="150" rx="14"/>
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">🔋</text>
           <text class="no-titulo" x="80" y="58" text-anchor="middle">BATERIA</text>
           <text class="no-valor cinza" x="80" y="94" text-anchor="middle" id="valBateria">— kW</text>
