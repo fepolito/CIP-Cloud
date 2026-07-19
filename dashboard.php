@@ -1558,12 +1558,12 @@ verificarToken()
       if (refs.bateriaDia) refs.bateriaDia.textContent = '— kWh';
       if (refs.bateria) refs.bateria.textContent = 'STANDBY';
 
-      // ── Fluxos (velocidade + on/off independentes) ──
-      aplicarFluxo(refs.fluxoGeracao,   f.geracao_w);
+      // ⚡ Fluxos (velocidade + on/off independentes) ⚡
+      aplicarFluxo(refs.fluxoGeracao,   f.exportada_w /* TODO(inversor) */);
       aplicarFluxo(refs.fluxoImportada, f.importada_w);
       aplicarFluxo(refs.fluxoExportada, f.exportada_w);
 
-      if (f.geracao_w === null || f.geracao_w === undefined) {
+      if (f.exportada_w === null || f.exportada_w === undefined) { // TODO(inversor)
         if (refs.geracao) refs.geracao.closest('.no-grupo').classList.add('sem-dado');
       } else {
         if (refs.geracao) refs.geracao.closest('.no-grupo').classList.remove('sem-dado');
