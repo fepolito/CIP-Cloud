@@ -883,7 +883,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
     <!-- Palco SVG do infografico -->
     <div class="infografico-palco">
-      <svg viewBox="0 0 1000 480" preserveAspectRatio="xMidYMid meet"
+      <svg viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid meet"
            xmlns="http://www.w3.org/2000/svg"
            class="infografico-svg" aria-label="Fluxo de energia">
 
@@ -954,44 +954,44 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
 
         <!-- No: MODULOS FOTOVOLTAICOS -->
         <g class="no-grupo" transform="translate(420, 30)">
-          <text class="no-emoji"  x="80" y="38" text-anchor="middle">☀️</text>
-          <text class="no-titulo" x="80" y="58" text-anchor="middle">MODULOS FV</text>
-          <text class="no-valor amarelo" x="80" y="94" text-anchor="middle" id="valGeracao">0.00 kW</text>
-          <text class="no-sub" x="80" y="118" text-anchor="middle" id="valGeracaoDia">— kWh</text>
+          <text class="no-emoji" style="font-size: 90px;" x="80" y="38" text-anchor="middle">☀️</text>
+          <text class="no-titulo" x="80" y="100" text-anchor="middle">MODULOS FV</text>
+          <text class="no-valor amarelo" x="80" y="125" text-anchor="middle" id="valGeracao">0.00 kW</text>
+          <text class="no-sub" x="80" y="145" text-anchor="middle" id="valGeracaoDia">— kWh</text>
         </g>
 
         <!-- No: REDE / CONCESSIONARIA -->
         <g class="no-grupo" transform="translate(40, 250)">
           <text class="no-emoji"  x="80" y="38" text-anchor="middle">⚡</text>
-          <text class="no-titulo" x="80" y="58" text-anchor="middle">REDE</text>
+          <text class="no-titulo" x="80" y="120" text-anchor="middle">REDE</text>
           
-          <text class="no-mini-lbl" x="80" y="82" text-anchor="middle">IMPORTAÇÃO</text>
-          <text class="no-valor vermelho" x="80" y="104" text-anchor="middle" id="valImportada">— kW</text>
-          <text class="no-sub" x="80" y="118" text-anchor="middle" id="valImportadaDia">— kWh hoje</text>
+          <text class="no-mini-lbl" x="80" y="145" text-anchor="middle">IMPORTAÇÃO</text>
+          <text class="no-valor vermelho" x="80" y="165" text-anchor="middle" id="valImportada">— kW</text>
+          <text class="no-sub" x="80" y="180" text-anchor="middle" id="valImportadaDia">— kWh hoje</text>
 
-          <text class="no-mini-lbl" x="80" y="142" text-anchor="middle">EXPORTAÇÃO</text>
-          <text class="no-valor verde" x="80" y="164" text-anchor="middle" id="valExportada">- kW</text>
-          <text class="no-sub" x="80" y="178" text-anchor="middle" id="valExportadaDia">— kWh hoje</text>
+          <text class="no-mini-lbl" x="80" y="210" text-anchor="middle">EXPORTAÇÃO</text>
+          <text class="no-valor verde" x="80" y="230" text-anchor="middle" id="valExportada">- kW</text>
+          <text class="no-sub" x="80" y="245" text-anchor="middle" id="valExportadaDia">— kWh hoje</text>
         </g>
 
         <!-- No: IMOVEL (central) -->
         <g class="no-grupo" transform="translate(400, 230)">
           <text class="no-emoji"  x="100" y="42" text-anchor="middle">🏠</text>
-          <text class="no-titulo" x="100" y="66" text-anchor="middle">IMOVEL</text>
+          <text class="no-titulo" x="100" y="125" text-anchor="middle">IMOVEL</text>
           
-          <text class="no-valor azul" x="100" y="96" text-anchor="middle" id="valConsumo">- kW</text>
-          <text class="no-sub" x="100" y="114" text-anchor="middle" id="valConsumoDia">— kWh hoje</text>
+          <text class="no-valor azul" x="100" y="155" text-anchor="middle" id="valConsumo">- kW</text>
+          <text class="no-sub" x="100" y="175" text-anchor="middle" id="valConsumoDia">— kWh hoje</text>
           
-          <text class="no-mini-lbl amarelo" x="100" y="146" text-anchor="middle">SALDO (GERAÇÃO - CONSUMO)</text>
-          <text class="no-valor sm" x="100" y="166" text-anchor="middle" id="valSaldo">—</text>
+          <text class="no-mini-lbl amarelo" x="100" y="205" text-anchor="middle">SALDO (GERAÇÃO - CONSUMO)</text>
+          <text class="no-valor sm" x="100" y="225" text-anchor="middle" id="valSaldo">—</text>
         </g>
 
         <!-- No: BATERIA (standby) -->
         <g class="no-grupo standby" transform="translate(800, 245)">
-          <text class="no-emoji"  x="80" y="38" text-anchor="middle">🔋</text>
-          <text class="no-titulo" x="80" y="58" text-anchor="middle">BATERIA</text>
-          <text class="no-valor cinza" x="80" y="94" text-anchor="middle" id="valBateria">— kW</text>
-          <text class="no-sub" x="80" y="118" text-anchor="middle" id="valBateriaDia">— kWh hoje</text>
+          <text class="no-emoji" style="font-size: 90px;" x="80" y="38" text-anchor="middle">🔋</text>
+          <text class="no-titulo" x="80" y="100" text-anchor="middle">BATERIA</text>
+          <text class="no-valor cinza" x="80" y="125" text-anchor="middle" id="valBateria">— kW</text>
+          <text class="no-sub" x="80" y="145" text-anchor="middle" id="valBateriaDia">— kWh hoje</text>
         </g>
 
       </svg>
