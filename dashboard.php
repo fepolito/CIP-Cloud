@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.19.0
+ * @versao        1.19.1
  * @modificado_em 2026-07-19
  * @objetivo      Interface principal de visualização de telemetria e fluxos
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -101,6 +101,7 @@
  *   2026-07-19  v1.18.12 [ADD] Badge de variação (comparativo) nos cards de economia (Fase 1).
  *   2026-07-19  v1.18.13 [FIX] Ajuste UX do badge (Fase 1).
  *   2026-07-19  v1.19.0  [ADD] Navegação temporal nos cards de economia (Fase 2).
+ *   2026-07-19  v1.19.1  [FIX] Datepickers iniciam preenchidos com dia/mês atuais (Fase 2.1).
  * ============================================================
  */
 
@@ -1240,13 +1241,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (dpDia) {
     dpDia.min = lim.minDia; dpDia.max = lim.maxDia;
+    dpDia.value = lim.maxDia;
     dpDia.addEventListener('change', e => {
-      navEconomia.dia = e.target.value || null;
-      document.getElementById('eco-hoje-dia').hidden = !navEconomia.dia;
+      const ehHoje = e.target.value === lim.maxDia;
+      navEconomia.dia = ehHoje ? null : (e.target.value || null);
+      document.getElementById('eco-hoje-dia').hidden = ehHoje || !e.target.value;
       if (window._dadosControlador) atualizarCardEconomia(window._dadosControlador.id);
     });
     document.getElementById('eco-hoje-dia').addEventListener('click', () => {
-      navEconomia.dia = null; dpDia.value = '';
+      navEconomia.dia = null; dpDia.value = lim.maxDia;
       document.getElementById('eco-hoje-dia').hidden = true;
       if (window._dadosControlador) atualizarCardEconomia(window._dadosControlador.id);
     });
@@ -1254,13 +1257,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (dpMes) {
     dpMes.min = lim.minMes; dpMes.max = lim.maxMes;
+    dpMes.value = lim.maxMes;
     dpMes.addEventListener('change', e => {
-      navEconomia.mes = e.target.value || null;
-      document.getElementById('eco-hoje-mes').hidden = !navEconomia.mes;
+      const ehMesAtual = e.target.value === lim.maxMes;
+      navEconomia.mes = ehMesAtual ? null : (e.target.value || null);
+      document.getElementById('eco-hoje-mes').hidden = ehMesAtual || !e.target.value;
       if (window._dadosControlador) atualizarCardEconomiaMes(window._dadosControlador.id);
     });
     document.getElementById('eco-hoje-mes').addEventListener('click', () => {
-      navEconomia.mes = null; dpMes.value = '';
+      navEconomia.mes = null; dpMes.value = lim.maxMes;
       document.getElementById('eco-hoje-mes').hidden = true;
       if (window._dadosControlador) atualizarCardEconomiaMes(window._dadosControlador.id);
     });
@@ -1412,10 +1417,11 @@ async function carregarKpis() {
       if (!window._dadosControlador || window._dadosControlador.id !== controlador.id) {
         navEconomia.dia = null;
         navEconomia.mes = null;
+        const lim = limitesDatepicker();
         const dpD = document.getElementById('eco-nav-dia');
         const dpM = document.getElementById('eco-nav-mes');
-        if (dpD) { dpD.value = ''; document.getElementById('eco-hoje-dia').hidden = true; }
-        if (dpM) { dpM.value = ''; document.getElementById('eco-hoje-mes').hidden = true; }
+        if (dpD) { dpD.value = lim.maxDia; document.getElementById('eco-hoje-dia').hidden = true; }
+        if (dpM) { dpM.value = lim.maxMes; document.getElementById('eco-hoje-mes').hidden = true; }
       }
       window._dadosControlador = controlador;
       if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
