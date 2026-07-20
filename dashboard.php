@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.13
+ * @versao        1.19.0
  * @modificado_em 2026-07-19
  * @objetivo      Interface principal de visualização de telemetria e fluxos
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -99,6 +99,8 @@
  *                        carona no ciclo 10s, badge fator_injecao. CIP-DEC-20260718-012
  *   2026-07-19  v1.18.10 [ADD] Card economia do mês e refatoração JS.
  *   2026-07-19  v1.18.12 [ADD] Badge de variação (comparativo) nos cards de economia (Fase 1).
+ *   2026-07-19  v1.18.13 [FIX] Ajuste UX do badge (Fase 1).
+ *   2026-07-19  v1.19.0  [ADD] Navegação temporal nos cards de economia (Fase 2).
  * ============================================================
  */
 
@@ -518,6 +520,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     .eco-var-down  { color: #dc2626; }
     .eco-var-ctx   { font-size: .72rem; color: var(--txt-dim, #6b7280); margin-left: .35rem; font-weight: 400; }
     .eco-var-vazio { font-size: .72rem; color: var(--txt-dim, #9ca3af); font-style: italic; font-weight: 400; }
+
+    .eco-nav       { font-size: .8rem; padding: 2px 6px; border-radius: 6px;
+                     border: 1px solid var(--border, #d1d5db); background: transparent; color: var(--txt); margin-left: 8px; }
+    .eco-nav-hoje  { font-size: .72rem; margin-left: .4rem; cursor: pointer;
+                     background: none; border: none; color: var(--txt-dim, #6b7280);
+                     text-decoration: underline; }
 
     .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--txt); }
     .cb-titulo small { font-weight: 400; opacity: .6; }
@@ -1067,6 +1075,8 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       <h3 class="cb-titulo">
         💰 Economia do Dia
         <small>(Lei 14.300)</small>
+        <input type="date" id="eco-nav-dia" class="eco-nav" title="Escolher dia">
+        <button type="button" id="eco-hoje-dia" class="eco-nav-hoje" hidden>Hoje</button>
         <span class="eco-fator" id="eco-fator" title="Fator de injeção vigente"></span>
       </h3>
 
@@ -1093,6 +1103,8 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       <h3 class="cb-titulo">
         📅 Economia do Mês
         <small>(Lei 14.300)</small>
+        <input type="month" id="eco-nav-mes" class="eco-nav" title="Escolher mês">
+        <button type="button" id="eco-hoje-mes" class="eco-nav-hoje" hidden>Mês atual</button>
         <span class="eco-fator" id="eco-fator-mes" title="Fator de injeção vigente"></span>
       </h3>
       <div class="ce-total">
@@ -1211,6 +1223,50 @@ async function atualizarCardsEnergia(controladorId) {
   }
 }
 
+const navEconomia = { dia: null, mes: null };
+
+function limitesDatepicker() {
+  const hoje = new Date();
+  const min  = new Date(hoje); min.setMonth(min.getMonth() - 12);
+  const iso  = d => d.toISOString().slice(0, 10);
+  return { minDia: iso(min), maxDia: iso(hoje),
+           minMes: iso(min).slice(0,7), maxMes: iso(hoje).slice(0,7) };
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const lim = limitesDatepicker();
+  const dpDia = document.getElementById('eco-nav-dia');
+  const dpMes = document.getElementById('eco-nav-mes');
+  
+  if (dpDia) {
+    dpDia.min = lim.minDia; dpDia.max = lim.maxDia;
+    dpDia.addEventListener('change', e => {
+      navEconomia.dia = e.target.value || null;
+      document.getElementById('eco-hoje-dia').hidden = !navEconomia.dia;
+      if (window._dadosControlador) atualizarCardEconomia(window._dadosControlador.id);
+    });
+    document.getElementById('eco-hoje-dia').addEventListener('click', () => {
+      navEconomia.dia = null; dpDia.value = '';
+      document.getElementById('eco-hoje-dia').hidden = true;
+      if (window._dadosControlador) atualizarCardEconomia(window._dadosControlador.id);
+    });
+  }
+  
+  if (dpMes) {
+    dpMes.min = lim.minMes; dpMes.max = lim.maxMes;
+    dpMes.addEventListener('change', e => {
+      navEconomia.mes = e.target.value || null;
+      document.getElementById('eco-hoje-mes').hidden = !navEconomia.mes;
+      if (window._dadosControlador) atualizarCardEconomiaMes(window._dadosControlador.id);
+    });
+    document.getElementById('eco-hoje-mes').addEventListener('click', () => {
+      navEconomia.mes = null; dpMes.value = '';
+      document.getElementById('eco-hoje-mes').hidden = true;
+      if (window._dadosControlador) atualizarCardEconomiaMes(window._dadosControlador.id);
+    });
+  }
+});
+
 function pintarVariacao(elId, pct, refLabel) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -1235,8 +1291,9 @@ async function atualizarCardEconomia(controladorId) {
   const card = document.getElementById('cardEconomia');
   if (!card) return;
   try {
+    const refQ = navEconomia.dia ? `&ref=${navEconomia.dia}` : '';
     const r = await fetch(
-      `/api/energia/economia.php?controlador_id=${controladorId}&comparar=1`,
+      `/api/energia/economia.php?controlador_id=${controladorId}&comparar=1${refQ}`,
       { credentials: 'same-origin' }
     );
     const j = await r.json();
@@ -1246,11 +1303,19 @@ async function atualizarCardEconomia(controladorId) {
     const brl = (v) => Number(v || 0)
       .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    document.getElementById('eco-total').textContent       = brl(d.total);
-    document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_reais);
-    document.getElementById('eco-credito').textContent     = brl(d.credito_reais);
+    if (d.sem_dados) {
+      document.getElementById('eco-total').textContent = 'Sem dados';
+      document.getElementById('eco-autoconsumo').textContent = '—';
+      document.getElementById('eco-credito').textContent = '—';
+      pintarVariacao('eco-variacao', null);
+    } else {
+      document.getElementById('eco-total').textContent       = brl(d.total);
+      document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_reais);
+      document.getElementById('eco-credito').textContent     = brl(d.credito_reais);
 
-    pintarVariacao('eco-variacao', d.variacao_pct, 'ontem');
+      const refLabel = d.periodo_atual === false ? 'que no dia anterior' : 'que ontem';
+      pintarVariacao('eco-variacao', d.variacao_pct, refLabel);
+    }
 
     // Sub-info honesta: kWh exportados que geraram o crédito
     const sub = document.getElementById('eco-total-sub');
@@ -1275,17 +1340,27 @@ async function atualizarCardEconomia(controladorId) {
 
 async function atualizarCardEconomiaMes(controladorId) {
   try {
-    const r = await fetch(`/api/energia/economia.php?controlador_id=${controladorId}&periodo=mes&comparar=1`);
+    const refQ = navEconomia.mes ? `&ref=${navEconomia.mes}` : '';
+    const r = await fetch(`/api/energia/economia.php?controlador_id=${controladorId}&periodo=mes&comparar=1${refQ}`);
     const j = await r.json();
     const d = j.data;
     if (!d) return;
 
     const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    document.getElementById('eco-total-mes').textContent       = brl(d.total);
-    document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
-    document.getElementById('eco-credito-mes').textContent     = brl(d.credito_reais);
+    
+    if (d.sem_dados) {
+      document.getElementById('eco-total-mes').textContent = 'Sem dados';
+      document.getElementById('eco-autoconsumo-mes').textContent = '—';
+      document.getElementById('eco-credito-mes').textContent = '—';
+      pintarVariacao('eco-variacao-mes', null);
+    } else {
+      document.getElementById('eco-total-mes').textContent       = brl(d.total);
+      document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
+      document.getElementById('eco-credito-mes').textContent     = brl(d.credito_reais);
 
-    pintarVariacao('eco-variacao-mes', d.variacao_pct, 'no mesmo período do mês anterior');
+      const refLabel = d.periodo_atual === false ? 'que no mês anterior' : 'que no mesmo período do mês anterior';
+      pintarVariacao('eco-variacao-mes', d.variacao_pct, refLabel);
+    }
 
     const fatorMes = document.getElementById('eco-fator-mes');
     const fatorDia = document.getElementById('eco-fator');
@@ -1334,6 +1409,14 @@ async function carregarKpis() {
         if (txt) txt.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
       }
 
+      if (!window._dadosControlador || window._dadosControlador.id !== controlador.id) {
+        navEconomia.dia = null;
+        navEconomia.mes = null;
+        const dpD = document.getElementById('eco-nav-dia');
+        const dpM = document.getElementById('eco-nav-mes');
+        if (dpD) { dpD.value = ''; document.getElementById('eco-hoje-dia').hidden = true; }
+        if (dpM) { dpM.value = ''; document.getElementById('eco-hoje-mes').hidden = true; }
+      }
       window._dadosControlador = controlador;
       if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
       if (typeof atualizarCardEconomia === 'function') {
