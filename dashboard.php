@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.10
+ * @versao        1.18.12
  * @modificado_em 2026-07-19
  * @objetivo      Interface principal de visualização de telemetria e fluxos
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -98,6 +98,7 @@
  *   2026-07-18  v1.18.0  [ADD] Card economia (Lei 14.300) em #cards-host,
  *                        carona no ciclo 10s, badge fator_injecao. CIP-DEC-20260718-012
  *   2026-07-19  v1.18.10 [ADD] Card economia do mês e refatoração JS.
+ *   2026-07-19  v1.18.12 [ADD] Badge de variação (comparativo) nos cards de economia (Fase 1).
  * ============================================================
  */
 
@@ -510,6 +511,10 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     .card-economia[data-loading="true"]  .cb-valor,
     .card-economia[data-loading="true"]  .ce-total-val { opacity: .35; }
     .card-economia[data-loading="error"] .ce-total-val { color: var(--red); }
+
+    .eco-variacao { font-size: .75rem; font-weight: 600; margin-left: .4rem; }
+    .eco-var-up   { color: #16a34a; }  /* verde = economizou mais */
+    .eco-var-down { color: #dc2626; }  /* vermelho = economizou menos */
 
     .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--txt); }
     .cb-titulo small { font-weight: 400; opacity: .6; }
@@ -1065,6 +1070,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       <div class="ce-total">
         <span class="ce-total-val" id="eco-total">—</span>
         <span class="ce-total-sub" id="eco-total-sub">estimativa hoje</span>
+        <span class="eco-variacao" id="eco-variacao" title="vs. ontem">—</span>
       </div>
 
       <div class="ce-linha">
@@ -1089,6 +1095,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       <div class="ce-total">
         <span class="ce-total-val" id="eco-total-mes">—</span>
         <span class="ce-total-sub" id="eco-total-sub-mes">acumulado no mês</span>
+        <span class="eco-variacao" id="eco-variacao-mes" title="vs. mês anterior (parcial)">—</span>
       </div>
       <div class="ce-linha">
         <span class="cb-icone">☀️</span>
@@ -1201,6 +1208,15 @@ async function atualizarCardsEnergia(controladorId) {
   }
 }
 
+function pintarVariacao(elId, pct) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (pct === null || pct === undefined) { el.textContent = '—'; el.className = 'eco-variacao'; return; }
+  const up = pct >= 0;
+  el.textContent = `${up ? '▲' : '▼'} ${Math.abs(pct).toLocaleString('pt-BR')}%`;
+  el.className = `eco-variacao ${up ? 'eco-var-up' : 'eco-var-down'}`;
+}
+
 /**
  * Card economia (Lei 14.300) — consome api/energia/economia.php.
  * Carona no ciclo de 10s via carregarKpis(). Método: simplificado_v1.
@@ -1210,7 +1226,7 @@ async function atualizarCardEconomia(controladorId) {
   if (!card) return;
   try {
     const r = await fetch(
-      `/api/energia/economia.php?controlador_id=${controladorId}`,
+      `/api/energia/economia.php?controlador_id=${controladorId}&comparar=1`,
       { credentials: 'same-origin' }
     );
     const j = await r.json();
@@ -1223,6 +1239,8 @@ async function atualizarCardEconomia(controladorId) {
     document.getElementById('eco-total').textContent       = brl(d.total);
     document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_reais);
     document.getElementById('eco-credito').textContent     = brl(d.credito_reais);
+
+    pintarVariacao('eco-variacao', d.variacao_pct);
 
     // Sub-info honesta: kWh exportados que geraram o crédito
     const sub = document.getElementById('eco-total-sub');
@@ -1247,7 +1265,7 @@ async function atualizarCardEconomia(controladorId) {
 
 async function atualizarCardEconomiaMes(controladorId) {
   try {
-    const r = await fetch(`/api/energia/economia.php?controlador_id=${controladorId}&periodo=mes`);
+    const r = await fetch(`/api/energia/economia.php?controlador_id=${controladorId}&periodo=mes&comparar=1`);
     const j = await r.json();
     const d = j.data;
     if (!d) return;
@@ -1256,6 +1274,8 @@ async function atualizarCardEconomiaMes(controladorId) {
     document.getElementById('eco-total-mes').textContent       = brl(d.total);
     document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
     document.getElementById('eco-credito-mes').textContent     = brl(d.credito_reais);
+
+    pintarVariacao('eco-variacao-mes', d.variacao_pct);
 
     const fatorMes = document.getElementById('eco-fator-mes');
     const fatorDia = document.getElementById('eco-fator');
