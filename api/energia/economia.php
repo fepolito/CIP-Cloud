@@ -1,9 +1,9 @@
 <?php
 /**
  * @arquivo       api/energia/economia.php
- * @versao        1.0.0
- * @modificado_em 2026-07-18
- * @objetivo      Endpoint financeiro: economia estimada do dia (autoconsumo +
+ * @versao        1.1.0
+ * @modificado_em 2026-07-19
+ * @objetivo      Endpoint financeiro: economia estimada do dia e do mes (autoconsumo +
  *                crédito de injeção) via TarifaService. Query própria, tenant-aware.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
@@ -32,6 +32,8 @@ use app\services\TarifaService;
 require_once __DIR__ . '/../../app/services/TarifaService.php';
 
 $usuario = authUsuario();
+
+$periodo = (($_GET['periodo'] ?? 'dia') === 'mes') ? 'mes' : 'dia';
 
 $controladorId = filter_input(INPUT_GET, 'controlador_id', FILTER_VALIDATE_INT);
 if ($controladorId === false || $controladorId === null || $controladorId <= 0) {
@@ -86,8 +88,13 @@ try {
         $tzStr = 'America/Sao_Paulo';
     }
     
-    $dtInicio = new DateTimeImmutable('today', $tz);
-    $dtFim    = $dtInicio->modify('+1 day');
+    if ($periodo === 'mes') {
+        $dtInicio = new DateTimeImmutable('first day of this month 00:00:00', $tz);
+        $dtFim    = $dtInicio->modify('first day of next month');
+    } else {
+        $dtInicio = new DateTimeImmutable('today', $tz);
+        $dtFim    = $dtInicio->modify('+1 day');
+    }
     
     $inicioUtc = $dtInicio->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     $fimUtc    = $dtFim->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');

@@ -1,9 +1,9 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.8
+ * @versao        1.18.10
  * @modificado_em 2026-07-19
- * @objetivo      Dashboard de monitoramento de energia (KPIs + nós minimalistas SVG e cards instantâneos)
+ * @objetivo      Interface principal de visualização de telemetria e fluxos
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
  * Dependências de hardware:
@@ -97,6 +97,7 @@
  *   2026-07-17  v1.17.3  [FIX] Restauração do card-energia (Balanço Energético) após Hipótese B.
  *   2026-07-18  v1.18.0  [ADD] Card economia (Lei 14.300) em #cards-host,
  *                        carona no ciclo 10s, badge fator_injecao. CIP-DEC-20260718-012
+ *   2026-07-19  v1.18.10 [ADD] Card economia do mês e refatoração JS.
  * ============================================================
  */
 
@@ -1072,9 +1073,32 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
         <span class="cb-valor" id="eco-autoconsumo">—</span>
       </div>
       <div class="ce-linha">
-        <span class="cb-icone">🔁</span>
+        <span class="cb-icone">💡</span>
         <span class="cb-label">Crédito injeção</span>
         <span class="cb-valor" id="eco-credito">—</span>
+      </div>
+    </div>
+
+    <!-- 💰📅 Card Economia do Mês (Lei 14.300) -->
+    <div class="card-economia card-barras" id="cardEconomiaMes" data-loading="true">
+      <h3 class="cb-titulo">
+        📅 Economia do Mês
+        <small>(Lei 14.300)</small>
+        <span class="eco-fator" id="eco-fator-mes" title="Fator de injeção vigente"></span>
+      </h3>
+      <div class="ce-total">
+        <span class="ce-total-val" id="eco-total-mes">—</span>
+        <span class="ce-total-sub" id="eco-total-sub-mes">acumulado no mês</span>
+      </div>
+      <div class="ce-linha">
+        <span class="cb-icone">☀️</span>
+        <span class="cb-label">Autoconsumo</span>
+        <span class="cb-valor" id="eco-autoconsumo-mes">—</span>
+      </div>
+      <div class="ce-linha">
+        <span class="cb-icone">💡</span>
+        <span class="cb-label">Crédito injeção</span>
+        <span class="cb-valor" id="eco-credito-mes">—</span>
       </div>
     </div>
   </div>
@@ -1221,7 +1245,30 @@ async function atualizarCardEconomia(controladorId) {
   }
 }
 
-/** * carregarKpis() — versao simplificada do antigo carregar()
+async function atualizarCardEconomiaMes(controladorId) {
+  try {
+    const r = await fetch(`/api/energia/economia.php?controlador_id=${controladorId}&periodo=mes`);
+    const j = await r.json();
+    const d = j.data;
+    if (!d) return;
+
+    const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('eco-total-mes').textContent       = brl(d.total);
+    document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
+    document.getElementById('eco-credito-mes').textContent     = brl(d.credito_injecao_reais);
+
+    const fatorMes = document.getElementById('eco-fator-mes');
+    const fatorDia = document.getElementById('eco-fator');
+    if (fatorMes && fatorDia) fatorMes.textContent = fatorDia.textContent;
+
+    document.getElementById('cardEconomiaMes').dataset.loading = 'false';
+  } catch (e) {
+    console.error('[economiaMes]', e);
+  }
+}
+
+/**
+ * carregarKpis() — versao simplificada do antigo carregar()
  * Mantem o consumo de /api/dashboard/dados.php (legado) mas
  * atualiza APENAS os 9 KPIs do topo. Series temporais, gauge
  * e totalizadores foram removidos no Patch B2.1.
@@ -1259,7 +1306,10 @@ async function carregarKpis() {
 
       window._dadosControlador = controlador;
       if (typeof atualizarCardsEnergia === 'function') atualizarCardsEnergia(CTRL_ID);
-      if (typeof atualizarCardEconomia === 'function') atualizarCardEconomia(CTRL_ID);
+      if (typeof atualizarCardEconomia === 'function') {
+        atualizarCardEconomia(CTRL_ID);
+        atualizarCardEconomiaMes(CTRL_ID);
+      }
     }
 
     document.getElementById('refreshInfo').textContent =
