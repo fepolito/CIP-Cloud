@@ -1255,7 +1255,7 @@ async function atualizarCardEconomiaMes(controladorId) {
     const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     document.getElementById('eco-total-mes').textContent       = brl(d.total);
     document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
-    document.getElementById('eco-credito-mes').textContent     = brl(d.credito_injecao_reais);
+    document.getElementById('eco-credito-mes').textContent     = brl(d.credito_reais);
 
     const fatorMes = document.getElementById('eco-fator-mes');
     const fatorDia = document.getElementById('eco-fator');
