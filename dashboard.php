@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.18.12
+ * @versao        1.18.13
  * @modificado_em 2026-07-19
  * @objetivo      Interface principal de visualização de telemetria e fluxos
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -512,9 +512,12 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     .card-economia[data-loading="true"]  .ce-total-val { opacity: .35; }
     .card-economia[data-loading="error"] .ce-total-val { color: var(--red); }
 
-    .eco-variacao { font-size: .75rem; font-weight: 600; margin-left: .4rem; }
-    .eco-var-up   { color: #16a34a; }  /* verde = economizou mais */
-    .eco-var-down { color: #dc2626; }  /* vermelho = economizou menos */
+    .eco-variacao { margin-left: .4rem; }
+    .eco-var-badge { font-weight: 600; }
+    .eco-var-up    { color: #16a34a; }
+    .eco-var-down  { color: #dc2626; }
+    .eco-var-ctx   { font-size: .72rem; color: var(--txt-dim, #6b7280); margin-left: .35rem; font-weight: 400; }
+    .eco-var-vazio { font-size: .72rem; color: var(--txt-dim, #9ca3af); font-style: italic; font-weight: 400; }
 
     .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--txt); }
     .cb-titulo small { font-weight: 400; opacity: .6; }
@@ -1208,13 +1211,20 @@ async function atualizarCardsEnergia(controladorId) {
   }
 }
 
-function pintarVariacao(elId, pct) {
+function pintarVariacao(elId, pct, refLabel) {
   const el = document.getElementById(elId);
   if (!el) return;
-  if (pct === null || pct === undefined) { el.textContent = '—'; el.className = 'eco-variacao'; return; }
-  const up = pct >= 0;
-  el.textContent = `${up ? '▲' : '▼'} ${Math.abs(pct).toLocaleString('pt-BR')}%`;
-  el.className = `eco-variacao ${up ? 'eco-var-up' : 'eco-var-down'}`;
+  if (pct === null || pct === undefined) {
+    el.innerHTML = '<span class="eco-var-vazio">— sem base de comparação</span>';
+    return;
+  }
+  const up  = pct >= 0;
+  const seta = up ? '▲' : '▼';
+  const txt  = up ? 'a mais que' : 'a menos que';
+  const val  = Math.abs(pct).toLocaleString('pt-BR');
+  el.innerHTML =
+    `<span class="eco-var-badge ${up ? 'eco-var-up' : 'eco-var-down'}">${seta} ${val}%</span>` +
+    `<span class="eco-var-ctx">${txt} ${refLabel}</span>`;
 }
 
 /**
@@ -1240,7 +1250,7 @@ async function atualizarCardEconomia(controladorId) {
     document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_reais);
     document.getElementById('eco-credito').textContent     = brl(d.credito_reais);
 
-    pintarVariacao('eco-variacao', d.variacao_pct);
+    pintarVariacao('eco-variacao', d.variacao_pct, 'ontem');
 
     // Sub-info honesta: kWh exportados que geraram o crédito
     const sub = document.getElementById('eco-total-sub');
@@ -1275,7 +1285,7 @@ async function atualizarCardEconomiaMes(controladorId) {
     document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
     document.getElementById('eco-credito-mes').textContent     = brl(d.credito_reais);
 
-    pintarVariacao('eco-variacao-mes', d.variacao_pct);
+    pintarVariacao('eco-variacao-mes', d.variacao_pct, 'no mesmo período do mês anterior');
 
     const fatorMes = document.getElementById('eco-fator-mes');
     const fatorDia = document.getElementById('eco-fator');
