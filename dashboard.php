@@ -1310,23 +1310,27 @@ async function atualizarCardEconomia(controladorId) {
 
     if (d.sem_dados) {
       document.getElementById('eco-total').textContent = 'Sem dados';
+      document.getElementById('eco-total-sub').textContent = 'estimativa hoje';
       document.getElementById('eco-autoconsumo').textContent = '—';
+      document.getElementById('eco-autoconsumo').previousElementSibling.innerHTML = 'Autoconsumo';
       document.getElementById('eco-credito').textContent = '—';
+      document.getElementById('eco-credito').previousElementSibling.innerHTML = 'Crédito injeção';
       pintarVariacao('eco-variacao', null);
     } else {
+      const fmtKwh = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' kWh';
+      const kwhTotal = (d.autoconsumo_kwh || 0) + (d.exportada_kwh || 0);
+
       document.getElementById('eco-total').textContent       = brl(d.total);
+      document.getElementById('eco-total-sub').innerHTML     = `estimativa hoje <span style="opacity:0.8; font-weight:normal">(${fmtKwh(kwhTotal)})</span>`;
+      
       document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_reais);
+      document.getElementById('eco-autoconsumo').previousElementSibling.innerHTML = `Autoconsumo <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.autoconsumo_kwh)})</span>`;
+      
       document.getElementById('eco-credito').textContent     = brl(d.credito_reais);
+      document.getElementById('eco-credito').previousElementSibling.innerHTML = `Crédito injeção <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.exportada_kwh)})</span>`;
 
       const refLabel = d.periodo_atual === false ? 'que no dia anterior' : 'que ontem';
       pintarVariacao('eco-variacao', d.variacao_pct, refLabel);
-    }
-
-    // Sub-info honesta: kWh exportados que geraram o crédito
-    const sub = document.getElementById('eco-total-sub');
-    if (sub && d.exportada_kwh != null) {
-      const kwh = Number(d.exportada_kwh).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-      sub.textContent = `estimativa hoje · ${kwh} kWh injetados`;
     }
 
     // Badge fator de injeção (Lei 14.300)
@@ -1355,13 +1359,24 @@ async function atualizarCardEconomiaMes(controladorId) {
     
     if (d.sem_dados) {
       document.getElementById('eco-total-mes').textContent = 'Sem dados';
+      document.getElementById('eco-total-sub-mes').textContent = 'acumulado no mês';
       document.getElementById('eco-autoconsumo-mes').textContent = '—';
+      document.getElementById('eco-autoconsumo-mes').previousElementSibling.innerHTML = 'Autoconsumo';
       document.getElementById('eco-credito-mes').textContent = '—';
+      document.getElementById('eco-credito-mes').previousElementSibling.innerHTML = 'Crédito injeção';
       pintarVariacao('eco-variacao-mes', null);
     } else {
+      const fmtKwh = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' kWh';
+      const kwhTotal = (d.autoconsumo_kwh || 0) + (d.exportada_kwh || 0);
+
       document.getElementById('eco-total-mes').textContent       = brl(d.total);
+      document.getElementById('eco-total-sub-mes').innerHTML     = `acumulado no mês <span style="opacity:0.8; font-weight:normal">(${fmtKwh(kwhTotal)})</span>`;
+
       document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
+      document.getElementById('eco-autoconsumo-mes').previousElementSibling.innerHTML = `Autoconsumo <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.autoconsumo_kwh)})</span>`;
+      
       document.getElementById('eco-credito-mes').textContent     = brl(d.credito_reais);
+      document.getElementById('eco-credito-mes').previousElementSibling.innerHTML = `Crédito injeção <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.exportada_kwh)})</span>`;
 
       const refLabel = d.periodo_atual === false ? 'que no mês anterior' : 'que no mesmo período do mês anterior';
       pintarVariacao('eco-variacao-mes', d.variacao_pct, refLabel);
