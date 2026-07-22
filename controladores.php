@@ -63,10 +63,14 @@ function generateApiToken(): string
 
 // Verificar se é admin
 $usuarioPerfil = isset($_SESSION['usuario_perfil']) ? (string) $_SESSION['usuario_perfil'] : '';
-if ($usuarioPerfil !== 'admin') {
+$ehAdmin = in_array($usuarioPerfil, ['master', 'master_operador', 'administrador'], true);
+if (!$ehAdmin) {
     header('Location: ' . APP_URL . '/dashboard.php');
     exit;
 }
+
+$appTituloPagina = 'Controladores ESP32-S3';
+$appPaginaAtual  = 'controladores';
 
 $pdo = Database::getConnection();
 
@@ -94,6 +98,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $clienteNome = trim((string) ($_POST['cliente_nome'] ?? ''));
                     $observacoes = trim((string) ($_POST['observacoes'] ?? ''));
                     $status = (string) ($_POST['status'] ?? 'ativo');
+                    $modalidadeCompensacao = (string) ($_POST['modalidade_compensacao'] ?? 'GD_II_LEI_14300');
+                    $tarifaKwh = (float) ($_POST['tarifa_kwh'] ?? 0.9482);
+                    $fatorInjecao = (float) ($_POST['fator_injecao'] ?? 0.760);
 
                     // Validação básica
                     if ($codigo === '' || $apelido === '') {
@@ -128,9 +135,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Inserir novo controlador
                         $stmt = $pdo->prepare('
                             INSERT INTO controladores 
-                            (codigo, apelido, local_instalacao, cliente_nome, observacoes, status, token_api_hash) 
+                            (codigo, apelido, local_instalacao, cliente_nome, observacoes, status, token_api_hash, modalidade_compensacao, tarifa_kwh, fator_injecao) 
                             VALUES 
-                            (:codigo, :apelido, :local_instalacao, :cliente_nome, :observacoes, :status, :token_hash)
+                            (:codigo, :apelido, :local_instalacao, :cliente_nome, :observacoes, :status, :token_hash, :modalidade, :tarifa, :fator)
                         ');
                         
                         $stmt->bindParam(':codigo', $codigo);
@@ -140,6 +147,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt->bindParam(':observacoes', $observacoes);
                         $stmt->bindParam(':status', $status);
                         $stmt->bindParam(':token_hash', $tokenHash);
+                        $stmt->bindParam(':modalidade', $modalidadeCompensacao);
+                        $stmt->bindParam(':tarifa', $tarifaKwh);
+                        $stmt->bindParam(':fator', $fatorInjecao);
                         
                         $stmt->execute();
                         
@@ -170,6 +180,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 cliente_nome = :cliente_nome,
                                 observacoes = :observacoes,
                                 status = :status,
+                                modalidade_compensacao = :modalidade,
+                                tarifa_kwh = :tarifa,
+                                fator_injecao = :fator,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE id = :id
                         ');
@@ -180,6 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt->bindParam(':cliente_nome', $clienteNome);
                         $stmt->bindParam(':observacoes', $observacoes);
                         $stmt->bindParam(':status', $status);
+                        $stmt->bindParam(':modalidade', $modalidadeCompensacao);
+                        $stmt->bindParam(':tarifa', $tarifaKwh);
+                        $stmt->bindParam(':fator', $fatorInjecao);
                         $stmt->bindParam(':id', $controladorId, PDO::PARAM_INT);
                         
                         $stmt->execute();
@@ -258,6 +274,9 @@ try {
             fw_version,
             last_seen_at,
             last_telemetry_at,
+            modalidade_compensacao,
+            tarifa_kwh,
+            fator_injecao,
             created_at,
             updated_at
         FROM controladores 
@@ -299,30 +318,20 @@ function formatarDataHora(?string $dataHora): string
 }
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-tema="escuro">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controladores</title>
-    <link rel="stylesheet" href="<?php echo e(appUrl('/assets/css/app.css')); ?>">
+    <?php require __DIR__ . '/includes/app_head.php'; ?>
     <link rel="stylesheet" href="<?php echo e(appUrl('/assets/css/controladores.css')); ?>">
 </head>
 <body>
-    <header class="topbar">
-        <div class="topbar-inner">
-            <div class="topbar-left">
-                <h1>Controladores ESP32-S3</h1>
-                <p class="subtitle">Gestão dos dispositivos de campo</p>
-            </div>
-            
-            <div class="topbar-right">
-                <a href="<?php echo e(appUrl('/dashboard.php')); ?>" class="btn btn-light">Voltar ao Dashboard</a>
-                <a href="<?php echo e(appUrl('/logout.php')); ?>" class="btn btn-danger">Sair</a>
-            </div>
-        </div>
-    </header>
+    <div id="loading">
+        <div class="spin"></div>
+        <p>VERIFICANDO SESSÃO...</p>
+    </div>
 
-    <main class="container controladores-container">
+    <?php require __DIR__ . '/includes/app_header.php'; ?>
+
+    <div class="wrap controladores-container">
         <?php if ($sucesso): ?>
             <div class="alert alert-success" role="alert">
                 <?php echo $sucesso; ?>
@@ -416,6 +425,52 @@ function formatarDataHora(?string $dataHora): string
                         </div>
 
                         <div class="form-group form-group-full">
+                            <hr style="margin: 10px 0; border: none; border-top: 1px solid var(--border-color);">
+                            <h3 style="margin-bottom: 10px; font-size: 1rem; color: var(--text-color);">Configurações de Tarifa e Compensação</h3>
+                        </div>
+
+                        <div class="form-group form-group-full">
+                            <label for="modalidade_compensacao" class="form-label">Modalidade de Compensação</label>
+                            <select id="modalidade_compensacao" name="modalidade_compensacao" class="form-select">
+                                <option value="GD_I_DIREITO_ADQUIRIDO" <?php echo ($controladorEditando && ($controladorEditando['modalidade_compensacao'] ?? '') === 'GD_I_DIREITO_ADQUIRIDO') ? 'selected' : ''; ?>>GD I (Direito Adquirido - Isento de Fio B)</option>
+                                <option value="GD_II_LEI_14300" <?php echo ($controladorEditando && ($controladorEditando['modalidade_compensacao'] ?? 'GD_II_LEI_14300') === 'GD_II_LEI_14300') ? 'selected' : ''; ?>>GD II (Lei 14.300 - Paga pedágio Fio B)</option>
+                                <option value="MERCADO_LIVRE" <?php echo ($controladorEditando && ($controladorEditando['modalidade_compensacao'] ?? '') === 'MERCADO_LIVRE') ? 'selected' : ''; ?>>Mercado Livre</option>
+                                <option value="OUTRO" <?php echo ($controladorEditando && ($controladorEditando['modalidade_compensacao'] ?? '') === 'OUTRO') ? 'selected' : ''; ?>>Outro</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="tarifa_kwh" class="form-label required">Tarifa de Consumo (R$/kWh)</label>
+                            <input 
+                                type="number" 
+                                step="0.0001"
+                                min="0"
+                                id="tarifa_kwh" 
+                                name="tarifa_kwh" 
+                                value="<?php echo $controladorEditando ? e($controladorEditando['tarifa_kwh'] ?? '0.9482') : '0.9482'; ?>" 
+                                class="form-input"
+                                required
+                            >
+                            <small class="text-muted" style="font-size: 0.75rem;">Soma da TUSD + TE (com impostos).</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="fator_injecao" class="form-label required">Fator de Injeção</label>
+                            <input 
+                                type="number" 
+                                step="0.001"
+                                min="0"
+                                max="1"
+                                id="fator_injecao" 
+                                name="fator_injecao" 
+                                value="<?php echo $controladorEditando ? e($controladorEditando['fator_injecao'] ?? '0.760') : '0.760'; ?>" 
+                                class="form-input"
+                                required
+                            >
+                            <small class="text-muted" style="font-size: 0.75rem;">Ex: 0.76 para Lei 14.300 ou 0.89 para GD I SP.</small>
+                        </div>
+
+                        <div class="form-group form-group-full">
                             <label for="observacoes" class="form-label">Observações</label>
                             <textarea 
                                 id="observacoes" 
@@ -478,7 +533,7 @@ function formatarDataHora(?string $dataHora): string
                                     <div class="controlador-meta">
                                         <span><strong>Firmware:</strong> <?php echo e($controlador['fw_version'] ?? 'Não informado'); ?></span>
                                         <span><strong>Último contato:</strong> <?php echo formatarDataHora($controlador['last_seen_at']); ?></span>
-                                        <span><strong>Cadastrado:</strong> <?php echo formatarDataHora($controlador['created_at']); ?></span>
+                                        <span><strong>Tarifa:</strong> R$ <?php echo number_format((float) ($controlador['tarifa_kwh'] ?? 0), 4, ',', '.'); ?> (Fator <?php echo number_format(((float) ($controlador['fator_injecao'] ?? 0)) * 100, 1, ',', '.'); ?>%)</span>
                                     </div>
                                 </div>
 
@@ -505,6 +560,6 @@ function formatarDataHora(?string $dataHora): string
                 <?php endif; ?>
             </section>
         </div>
-    </main>
+    </div>
 </body>
 </html>

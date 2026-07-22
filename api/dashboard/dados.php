@@ -88,10 +88,8 @@ $mapa_periodo = [
 $intervalo_sql = $mapa_periodo[$periodo];
 
 // ── Tarifa de energia ─────────────────────────────────────────
-// TODO (roadmap): substituir por consulta dinamica API ANEEL
-//                 endpoint previsto: /api/config/tarifa.php
-const TARIFA_KWH  = 0.85;
-const TARIFA_NOTA = 'Tarifa estática R$ 0,85/kWh — integração ANEEL prevista em roadmap';
+// Agora é carregada dinamicamente da tabela `controladores`
+// A integração direta via API ANEEL está prevista no roadmap futuro.
 
 // ── Conexao PDO ───────────────────────────────────────────────
 // getDbConnection() definida em config/database.php v1.1.0
@@ -241,7 +239,9 @@ $sql_ctrl = "
         online,
         ultimo_contato,
         last_seen_at,
-        last_telemetry_at
+        last_telemetry_at,
+        tarifa_kwh,
+        fator_injecao
     FROM controladores
     WHERE id = :cid
     LIMIT 1
@@ -271,8 +271,9 @@ if ($controlador) {
 // ─────────────────────────────────────────────────────────────
 // Calculo de custo estimado
 // ─────────────────────────────────────────────────────────────
+$tarifaKwh = $controlador ? (float) ($controlador['tarifa_kwh'] ?? 0.9482) : 0.9482;
 $energia_dia  = $totais['energia_kwh_dia'] ?? 0.0;
-$custo_dia    = round($energia_dia * TARIFA_KWH, 2);
+$custo_dia    = round($energia_dia * $tarifaKwh, 2);
 
 // ─────────────────────────────────────────────────────────────
 // Resposta JSON
@@ -285,6 +286,6 @@ echo json_encode([
     'series'       => $series,
     'controlador'  => $controlador,
     'custo_dia'    => $custo_dia,
-    'tarifa_kwh'   => TARIFA_KWH,
-    'nota_tarifa'  => TARIFA_NOTA,
+    'tarifa_kwh'   => $tarifaKwh,
+    'nota_tarifa'  => 'Tarifa dinâmica baseada na configuração do controlador.',
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

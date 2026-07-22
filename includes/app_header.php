@@ -92,11 +92,11 @@ $_ehAdminHeader  = in_array($_SESSION['usuario_perfil'] ?? '', ['master', 'maste
 
 $_configItems = [];
 if ($_ehAdminHeader) {
-    $_configItems[] = ['href' => 'usuarios.php',    'icon' => '👥', 'label' => 'Usuários',    'id' => 'usuarios'];
-    $_configItems[] = ['href' => 'dispositivos.php','icon' => '📡', 'label' => 'Dispositivos','id' => 'dispositivos'];
+    $_configItems[] = ['href' => 'usuarios.php',       'icon' => '👥', 'label' => 'Usuários',       'id' => 'usuarios'];
+    $_configItems[] = ['href' => 'controladores.php',  'icon' => '📡', 'label' => 'Controladores',  'id' => 'controladores'];
 }
 if ($_ehMasterHeader) {
-    $_configItems[] = ['href' => 'empresas.php',    'icon' => '🏢', 'label' => 'Empresas',    'id' => 'empresas'];
+    $_configItems[] = ['href' => 'empresas.php',       'icon' => '🏢', 'label' => 'Empresas',       'id' => 'empresas'];
 }
 $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 'id' => ''];
 ?>

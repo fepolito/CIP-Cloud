@@ -1,31 +1,29 @@
 <?php
 /**
  * @arquivo       app/services/TarifaService.php
- * @versao        1.0.0
- * @modificado_em 2026-07-18
+ * @versao        2.0.0
+ * @modificado_em 2026-07-22
  * @objetivo      Cálculo financeiro de energia (custo/economia) a partir de kWh.
- *                Fórmula v1: autoconsumo × tarifa + injeção × (tarifa × fator).
+ *                Fórmula dinâmica: tarifas providas pela tabela do controlador.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
 
 namespace app\services;
 
-require_once __DIR__ . '/../../api/config/env.php';
-
 final class TarifaService
 {
-    public static function custoConsumo(float $importadaKwh): float
+    public static function custoConsumo(float $importadaKwh, float $tarifaKwh): float
     {
-        return round($importadaKwh * TARIFA_KWH, 2);
+        return round($importadaKwh * $tarifaKwh, 2);
     }
 
-    public static function economia(float $geracaoKwh, float $exportadaKwh): array
+    public static function economia(float $geracaoKwh, float $exportadaKwh, float $tarifaKwh, float $fatorInjecao): array
     {
         $autoconsumoKwh = max(0.0, $geracaoKwh - $exportadaKwh);
-        $tarifaInjecao  = TARIFA_KWH * FATOR_INJECAO;   // 0,72065631
+        $tarifaInjecao  = $tarifaKwh * $fatorInjecao;
 
-        $valorAutoconsumo = $autoconsumoKwh * TARIFA_KWH;
+        $valorAutoconsumo = $autoconsumoKwh * $tarifaKwh;
         $valorCredito     = $exportadaKwh   * $tarifaInjecao;
 
         return [
@@ -34,12 +32,10 @@ final class TarifaService
             'credito_reais'      => round($valorCredito, 2),
             'autoconsumo_kwh'    => round($autoconsumoKwh, 3),
             'exportada_kwh'      => round($exportadaKwh, 3),
-            'tarifa_kwh'         => TARIFA_KWH,
+            'tarifa_kwh'         => $tarifaKwh,
             'tarifa_injecao_kwh' => round($tarifaInjecao, 8),
-            'fator_injecao'      => FATOR_INJECAO,
-            'metodo'             => 'simplificado_v1',
+            'fator_injecao'      => $fatorInjecao,
+            'metodo'             => 'dinamico_v2',
         ];
     }
-
-    // TODO: calcularCheio() → Lei 14.300 (Fio B escalonado, ICMS) por tenant.
 }

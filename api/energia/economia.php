@@ -48,7 +48,7 @@ if ($controladorId === false || $controladorId === null || $controladorId <= 0) 
  * Calcula economia (R$) de UMA janela [iniUtc, fimUtc).
  * Reaproveita $sqlData + TarifaService intactos.
  */
-function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $fimUtc): array {
+function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $fimUtc, float $tarifaKwh, float $fatorInjecao): array {
     $sqlData = "
         SELECT 
           COUNT(*) AS n_registros,
@@ -66,7 +66,7 @@ function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $f
     $geracaoKwh   = (float)$data['geracao_kwh'];
     $exportadaKwh = (float)$data['exportada_kwh'];
     
-    $ret = TarifaService::economia($geracaoKwh, $exportadaKwh);
+    $ret = TarifaService::economia($geracaoKwh, $exportadaKwh, $tarifaKwh, $fatorInjecao);
     $ret['sem_dados'] = ((int)$data['n_registros'] === 0);
     return $ret;
 }
@@ -82,7 +82,7 @@ try {
 try {
     $filtroTenant = Tenant::filtroSQL('c');
     $sqlCtrl = "
-        SELECT c.id, c.timezone
+        SELECT c.id, c.timezone, c.tarifa_kwh, c.fator_injecao
           FROM controladores c
          WHERE c.id = :id
            {$filtroTenant}
@@ -110,6 +110,8 @@ try {
     }
     
     $tzStr = $controlador['timezone'] ?: 'America/Sao_Paulo';
+    $tarifaKwh = (float)($controlador['tarifa_kwh'] ?? 0.9482);
+    $fatorInjecao = (float)($controlador['fator_injecao'] ?? 0.760);
     try {
         $tz = new DateTimeZone($tzStr);
     } catch (Exception $e) {
@@ -165,7 +167,7 @@ try {
     $iniUtc = $ini->setTimezone($utc)->format('Y-m-d H:i:s');
     $fimUtc = $fim->setTimezone($utc)->format('Y-m-d H:i:s');
     
-    $atual = calcularEconomiaJanela($pdo, (int)$controladorId, $iniUtc, $fimUtc);
+    $atual = calcularEconomiaJanela($pdo, (int)$controladorId, $iniUtc, $fimUtc, $tarifaKwh, $fatorInjecao);
     
     $resp = $atual;
     $resp['ref'] = $ref !== '' ? $ref : ($periodo === 'mes' ? $ini->format('Y-m') : $ini->format('Y-m-d'));
@@ -174,7 +176,7 @@ try {
     if ($comparar) {
         $iniAntUtc = $iniAnt->setTimezone($utc)->format('Y-m-d H:i:s');
         $fimAntUtc = $fimAnt->setTimezone($utc)->format('Y-m-d H:i:s');
-        $ant = calcularEconomiaJanela($pdo, (int)$controladorId, $iniAntUtc, $fimAntUtc);
+        $ant = calcularEconomiaJanela($pdo, (int)$controladorId, $iniAntUtc, $fimAntUtc, $tarifaKwh, $fatorInjecao);
 
         $tAtual = (float)($atual['total'] ?? 0);
         $tAnt   = (float)($ant['total'] ?? 0);
