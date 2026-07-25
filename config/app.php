@@ -11,6 +11,7 @@
  *   2026-05-31  v1.1.0  APP_URL agora e dinamico (detecta
  *                       protocolo + host em tempo de execucao)
  *                       para suportar dev/prod sem alteracao.
+ *   2026-07-25  v1.2.0  Adicionado POTENCIA_MAX_KW_FALLBACK (@modificado_em 2026-07-25)
  */
 
 declare(strict_types=1);
@@ -75,3 +76,10 @@ if (APP_ENV === 'production') {
 define('TELEMETRIA_CICLO_SEGUNDOS', is_ambiente_dev() ? 900 : 60);
 
 date_default_timezone_set('America/Sao_Paulo');
+
+/**
+ * @potencia_max  Fallback temporário para potência instalada da planta.
+ * TODO(Fase-inversores): substituir por SUM(potencia_kw) da tabela de
+ * inversores WHERE controlador_id = ?. Controle firmware é por % da potência.
+ */
+const POTENCIA_MAX_KW_FALLBACK = 7.0;

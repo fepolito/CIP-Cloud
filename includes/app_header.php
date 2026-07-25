@@ -83,7 +83,7 @@ $_menuItems = [
     ['href' => 'geracao.php',          'icon' => '🔆', 'label' => 'Geração',   'id' => 'geracao'],
     ['href' => 'historico.php',        'icon' => '📈', 'label' => 'Histórico', 'id' => 'historico'],
     ['href' => 'tarifas.php',          'icon' => '💰', 'label' => 'Tarifas',   'id' => 'tarifas'],
-    ['href' => 'limites_potencia.php', 'icon' => '🔧', 'label' => 'Limites',   'id' => 'limites_potencia'],
+    ['href' => 'limites.php', 'icon' => '🔧', 'label' => 'Limites',   'id' => 'limites'],
 ];
 
 // ── Itens do menu engrenagem ─────────────────────────────────

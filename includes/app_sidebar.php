@@ -68,8 +68,8 @@ $sidebarItems = [
     ],
     [
         'label' => 'Limites de Potência',
-        'url'   => '/limites_potencia.php',
-        'key'   => 'limites_potencia',
+        'url'   => '/limites.php',
+        'key'   => 'limites',
         'icon'  => '📊',
     ],
 ];
