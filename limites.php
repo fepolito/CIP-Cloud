@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       limites.php
- * @versao        2.1.0
+ * @versao        2.1.1
  * @modificado_em 2026-07-25
  * @objetivo      UI de limites de injeção (24h × 3 tipos de dia) com abas,
  *                seleção múltipla e preenchimento em massa; grava curva em kW
@@ -246,6 +246,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', ['master', 'maste
 
 <script>
 const CTRL_ID = <?= $controladorAtivo ? (int)$controladorAtivo['id'] : 'null' ?>;
+const API_BASE = <?= json_encode(APP_BASE_URL) ?>;  // '' em PROD, '/monitor.aeonium.com.br' em DEV
 const TABS = ['dias_uteis', 'sabado', 'domingo_feriado'];
 let currentTab = 'dias_uteis';
 let globalPotenciaMax = 7.0; // fallback inicial
@@ -369,7 +370,9 @@ function handleValidation(inp) {
 
 async function loadLimites() {
     try {
-        const res = await fetch(`/api/limites/tabela.php?controlador_id=${CTRL_ID}`);
+        const res = await fetch(`${API_BASE}/api/limites/tabela.php?controlador_id=${CTRL_ID}`, {
+            credentials: 'same-origin'
+        });
         if (!res.ok) throw new Error('Erro na requisição');
         const json = await res.json();
         if (json.sucesso && json.data) {
@@ -419,9 +422,10 @@ async function saveLimites() {
     });
     
     try {
-        const res = await fetch(`/api/limites/tabela.php`, {
+        const res = await fetch(`${API_BASE}/api/limites/tabela.php`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ controlador_id: CTRL_ID, payload: payload })
         });
         const json = await res.json();

@@ -20,18 +20,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../config/env.php';
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/helpers/Tenant.php';
 
 $is_dev = defined('IS_DEV') ? IS_DEV : false;
 
-// Sessao via includes/config.php ja inicia a sessao se necessario
-if (empty($_SESSION['usuario_id'])) {
-    http_response_code(401);
-    echo json_encode(['sucesso' => false, 'erro' => 'Nao autorizado']);
-    exit;
-}
+// Autentica o usuário e inicia a sessão (emite 401 se falhar)
+$usuario = authUsuario();
+$_SESSION['usuario_id'] = $usuario['id'];
 
 try {
     $pdo = getDbConnection();
