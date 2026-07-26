@@ -292,3 +292,18 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
 - **Data**: 2026-07-15
 - **Descrição**: O cálculo de cobertura de geração (porcentagem de dados presentes no dia) está sendo injetado temporariamente na API de resumo diário usando a tag TEMP-COBERTURA-SOLIS. Essa lógica deverá ser removida e substituída assim que a integração direta com a API da SolisCloud for ativada.
 - **Status**: Pendente de integração futura.
+
+
+## CIP-DEC-20260725-001 â€” Modelo de curva de limites: histÃ³rico versionado
+- **Contexto:** tabela_limites tem versao, ativa e ativa_uk (VIRTUAL UNIQUE).
+- **DecisÃ£o:** mÃºltiplas linhas por controlador, uma ativa garantida pelo banco. Push = desativa-antiga -> insere-nova-ativa em transaÃ§Ã£o. Proibido ON DUPLICATE KEY UPDATE.
+- **Impacto:** limites_push.php, LimitesSync.
+- **Status:** âœ… Confirmada (schema aplicado DEV+PROD)
+
+## CIP-DEC-20260725-002 â€” Colunas LWW adicionadas
+- **Contexto/DecisÃ£o:** atualizado_em, hash_payload, editado_em_local criadas em DEV+PROD.
+- **Status:** âœ… Confirmada
+
+## CIP-DEC-20260725-003 â€” sync_status inclui timeout
+- **Contexto/DecisÃ£o:** ENUM real: ('sincronizada','pendente_ack','timeout','divergente'). CÃ³digo de sync deve tratar timeout.
+- **Status:** ðŸŸ¡ Proposta (confirmar ao implementar o watcher de ACK)
