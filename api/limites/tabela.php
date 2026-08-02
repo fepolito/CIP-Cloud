@@ -1,12 +1,13 @@
 <?php
-// ============================================================
-// Arquivo:      api/limites/tabela.php
-// Finalidade:   Retorna e salva a tabela de limites de potência (24h x 3 perfis).
-//               Faz insert na tabela de log e gerencia a versao ativa.
-// Historico:    v1.1.0
-//               2026-07-25 - Adicionado potencia_max_kw (@modificado_em 2026-07-25)
-// ============================================================
-
+/**
+ * @arquivo       api/limites/tabela.php
+ * @versao        1.2.0
+ * @modificado_em 2026-07-25
+ * @objetivo      Endpoint GET/POST da curva de limites (tabela_limites):
+ *                versão em kW por hora × 3 tipos de dia. Sessão via
+ *                app/auth.php; conexão via getDbConnection(). Multi-tenant.
+ * @autor         Fernando / CIP Cloud Copilot / ATGY
+ */
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -89,6 +90,14 @@ if ($method === 'GET') {
 
         if ($row) {
             $payloadData = json_decode($row['payload_json'], true);
+            // Converte W do banco para kW para a UI
+            foreach (['dias_uteis', 'sabado', 'domingo_feriado'] as $ch) {
+                if (isset($payloadData[$ch]) && is_array($payloadData[$ch])) {
+                    foreach ($payloadData[$ch] as &$v) {
+                        $v = number_format((float)$v / 1000, 2, '.', '');
+                    }
+                }
+            }
             echo json_encode([
                 'sucesso' => true,
                 'data' => [
@@ -152,13 +161,16 @@ if ($method === 'POST') {
             echo json_encode(['sucesso' => false, 'erro' => "A chave $ch deve ser um array de 24 numeros"]);
             exit;
         }
-        foreach ($payload[$ch] as $val) {
+        foreach ($payload[$ch] as &$val) {
             if (!is_numeric($val) || (float)$val < 0) {
                 http_response_code(400);
                 echo json_encode(['sucesso' => false, 'erro' => "Todos os valores de $ch devem ser numericos >= 0"]);
                 exit;
             }
+            // Converte kW do front para Watts inteiros pro banco
+            $val = (int)round((float)$val * 1000);
         }
+        unset($val);
     }
 
     try {

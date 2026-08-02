@@ -307,3 +307,27 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
 ## CIP-DEC-20260725-003 — sync_status inclui timeout
 - **Contexto/Decisão:** ENUM real: ('sincronizada','pendente_ack','timeout','divergente'). Código de sync deve tratar timeout.
 - **Status:** 🟡 Proposta (confirmar ao implementar o watcher de ACK)
+
+## CIP-DEC-20260725-023
+- **Contexto/Decisão:** Auth device = reuso X-CIP-Serial + X-CIP-Token (reuso telemetria).
+- **Status:** 🟢 Confirmada
+
+## CIP-DEC-20260725-025 (REVOGADA)
+- **Contexto/Decisão:** Hash SHA-256, potencias como STRING '0.00' (2 casas).
+- **Status:** 🔴 Revogada pela CIP-DEC-20260608-004.
+
+## CIP-DEC-20260725-026
+- **Contexto/Decisão:** HTTPS setInsecure() no firmware = risco MITM aceito.
+- **Status:** 🟡 Débito (futuro: cert pin)
+
+## CIP-DEC-20260608-002
+- **Contexto/Decisão:** Chaves de payload confirmadas: dias_uteis / domingo_feriado / sabado. (antiga RDC-004 obsoleta).
+- **Status:** 🟢 Confirmada
+
+## CIP-DEC-20260608-004
+- **Contexto/Decisão:** Unidade canônica = Watts inteiros. kW é só apresentação (W/1000). Conversão proibida na fronteira do hash.
+- **Status:** 🟢 Confirmada
+
+## CIP-DEC-20260608-005
+- **Contexto/Decisão:** normalizarPotencias deixa de usar number_format(...,2) e passa a usar (int) round($v). Canônico = inteiros nus no JSON. Requer espelhamento no firmware (hash sobre int, não string).
+- **Status:** 🟢 Confirmada
