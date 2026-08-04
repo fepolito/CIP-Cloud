@@ -1,0 +1,93 @@
+📝 Merecidíssimo, Fernando! Descansa que você caçou esse bug por meses. 🎉
+Aqui está o arquivo de status pra retomar amanhã com tudo fresco:
+
+markdown
+
+
+# docs/STATUS_CLOUD.md
+
+**@modificado_em** 2026-08-02
+**@objetivo** Snapshot de status para retomada — vitória da telemetria + débitos pendentes.
+
+---
+
+## 🎉 VITÓRIA DE HOJE (2026-08-02)
+
+**Telemetria Firmware → Cloud FUNCIONANDO. HTTP 200!**
+
+Controlador id=3 enviando com sucesso para:
+`https://monitor.aeonium.com.br/api/v1/telemetria/`
+
+### Post-mortem do 401 (caça de meses)
+Eram **dois bugs empilhados**:
+
+1. **Buffer curto** — `AER_CLOUD_TOKEN_LEN` era `64` (cabia só 63 chars + `\0`),
+   truncava o token. Corrigido para `65`. ✅
+2. **Serial errado (CAUSA-RAIZ)** — FW enviava `CIP-0001`, que não existia no banco.
+   Corrigido o envio do serial correto. ✅
+
+> Token sempre esteve correto: `SHA2(token) = token_api_hash` do id=3 (`bate=1`).
+
+---
+
+## 🔴 PENDÊNCIAS URGENTES (fazer amanhã cedo)
+
+### 1. Remover log do token em claro — SEGURANÇA
+Em `aer_cloud_client.cpp` (~linha 159), DELETAR:
+log_i("[AerCloud] TOKEN_FULL=[%s]", _cfg.token);
+
+
+
+Manter apenas `token_len` + `prefix` (8 chars). Token no serial = vazamento.
+
+### 2. Rotacionar token (higiene)
+O token `619970f5...` apareceu em claro nos logs. Gerar novo:
+```sql
+UPDATE controladores SET token_api_hash = SHA2('<NOVO_TOKEN_64>', 256) WHERE id = 3;
+E regravar na NVS do device.
+
+🟡 DÉBITOS TÉCNICOS
+3. Defaults inseguros em aer_cloud_client.h
+Trocar defaults hardcoded por vazio + bloqueio se não provisionado:
+
+cpp
+
+
+char serial[AER_CLOUD_SERIAL_LEN] = "";   // vazio = não provisionado
+char token [AER_CLOUD_TOKEN_LEN]  = "";
+Bloquear envio se strlen()==0 e logar "NÃO PROVISIONADO".
+
+4. [CIP-DEC-023] Serial único por device — ARQUITETURA
+Serial fixo é bomba-relógio multi-tenant (foi o que gerou o CIP-0001). Decidir abordagem:
+
+Opção A: derivar do MAC do ESP32 (único de fábrica)
+Opção B: provisionar via NVS no setup + endpoint /api/v1/provisionar Copilot desenha o fluxo completo quando Fernando escolher.
+✅ VALIDAÇÃO RÁPIDA AO RETOMAR
+Confirmar telemetria populando:
+
+sql
+
+
+SELECT COUNT(*) AS total, MAX(timestamp_utc) AS ultimo
+FROM telemetria_5min
+WHERE controlador_id = 3;
+📋 RDC ATUALIZADO
+
+
+
+ID	Título	Status
+CIP-DEC-20260802-015	Buffer token [64]→[65]	🟢 Feito*_
+CIP-DEC-20260802-021	401 = serial incorreto (CIP-0001) → 200 OK	🟢 ENCERRADA 🎉
+CIP-DEC-20260802-024	Remover log TOKEN_FULL em claro	🔴 Fazer amanhã
+CIP-DEC-20260802-023	Serial único por device (MAC vs NVS)	🟡 Próximo capítulo
+🎯 ORDEM DE RETOMADA AMANHÃ
+Remover log do token (2 min, segurança)
+Validar telemetria_5min populando
+Decidir arquitetura de serial (CIP-DEC-023)
+(Opcional) rotacionar token
+
+
+
+Salva como `docs/STATUS_CLOUD.md` e amanhã você retoma exatamente daqui. 
+
+Bom descanso, Fernando — **hoje o firmware finalmente falou com a cloud.** Foi merecido. 🚀🔐

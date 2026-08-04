@@ -1,0 +1,232 @@
+DIR IN DEV, FILE IN PROD: .well-known
+DIR IN DEV, FILE IN PROD: Solis
+DIR IN DEV, FILE IN PROD: app/views
+DIR IN DEV, FILE IN PROD: assets/img/integradores
+DIR IN DEV, FILE IN PROD: backup
+DIR IN DEV, FILE IN PROD: docs/sql
+DIR IN DEV, FILE IN PROD: storage/backups
+MODIFIED: .htaccess
+MODIFIED: 500.shtml
+MODIFIED: api/.htaccess
+MODIFIED: api/auth/login.php
+MODIFIED: api/auth/logout.php
+MODIFIED: api/auth/session.php
+MODIFIED: api/config/env.php
+MODIFIED: api/controllers/ControladorController.php
+MODIFIED: api/controllers/LeituraController.php
+MODIFIED: api/dashboard/dados.php
+MODIFIED: api/energia/ano.php
+MODIFIED: api/energia/anos.php
+MODIFIED: api/energia/controladores.php
+MODIFIED: api/energia/dia.php
+MODIFIED: api/energia/media_12m.php
+MODIFIED: api/energia/mes.php
+MODIFIED: api/energia/resumo_dia.php
+MODIFIED: api/energia/resumo_mes.php
+MODIFIED: api/helpers/response.php
+MODIFIED: api/helpers/teste-tenant.php
+MODIFIED: api/index.php
+MODIFIED: api/middleware/auth.php
+MODIFIED: api/preferencias-tema.php
+MODIFIED: api/utils/gerar_hash.php
+MODIFIED: api/v1/cip/sync.php
+MODIFIED: api/v1/telemetria/index.php
+MODIFIED: app/.htaccess
+MODIFIED: app/helpers.php
+MODIFIED: app/security.php
+MODIFIED: app/services/Database.php
+MODIFIED: app/services/HmacAuth.php
+MODIFIED: app/services/Logger.php
+MODIFIED: app/services/UsuarioConviteService.php
+MODIFIED: app/services/UsuarioPermissaoService.php
+MODIFIED: assets/css/app.css
+MODIFIED: assets/css/controladores.css
+MODIFIED: assets/css/dashboard.css
+MODIFIED: assets/css/empresa.css
+MODIFIED: assets/css/header.css
+MODIFIED: assets/css/login.css
+MODIFIED: assets/css/usuarios.css
+MODIFIED: assets/js/app-shell.js
+MODIFIED: assets/js/tema.js
+MODIFIED: assets/js/upload-logo.js
+MODIFIED: changelog.md
+MODIFIED: config/app.php
+MODIFIED: config/database.example.php
+MODIFIED: config/database.php
+MODIFIED: config/sync.example.php
+MODIFIED: controladores.php
+MODIFIED: dispositivos.php
+MODIFIED: docs/HISTORICO_IMPLEMENTACOES.md
+MODIFIED: empresas.php
+MODIFIED: energia.php
+MODIFIED: geracao.php
+MODIFIED: historico.php
+MODIFIED: includes/app_head.php
+MODIFIED: includes/app_header.php
+MODIFIED: includes/app_sidebar.php
+MODIFIED: includes/config.php
+MODIFIED: includes/usuarios_rules.php
+MODIFIED: index.php
+MODIFIED: login.php
+MODIFIED: logout.php
+MODIFIED: projeto_admin.php
+MODIFIED: tarifas.php
+MODIFIED: usuarios.php
+NEW IN DEV (Not in PROD): .cpanel.yml
+NEW IN DEV (Not in PROD): .editorconfig
+NEW IN DEV (Not in PROD): .gitignore
+NEW IN DEV (Not in PROD): .htaccess.bak.v1
+NEW IN DEV (Not in PROD): .user.ini
+NEW IN DEV (Not in PROD): Leitura_semana_5min.xlsx
+NEW IN DEV (Not in PROD): _audit_deleted_files.txt
+NEW IN DEV (Not in PROD): _audit_history_dbstrings.txt
+NEW IN DEV (Not in PROD): _audit_history_passwords.txt
+NEW IN DEV (Not in PROD): _audit_tracked.txt
+NEW IN DEV (Not in PROD): api/auth/debug_verify.log
+NEW IN DEV (Not in PROD): api/auth/error_log
+NEW IN DEV (Not in PROD): api/energia/error_log
+NEW IN DEV (Not in PROD): api/error_log
+NEW IN DEV (Not in PROD): api/sync/limites_check.php
+NEW IN DEV (Not in PROD): api/sync/limites_push.php
+NEW IN DEV (Not in PROD): api/v1/telemetria/error_log
+NEW IN DEV (Not in PROD): assets/js/cip-gauge.js
+NEW IN DEV (Not in PROD): assets/js/cip-pico-dia.js
+NEW IN DEV (Not in PROD): check_db.py
+NEW IN DEV (Not in PROD): check_db2.py
+NEW IN DEV (Not in PROD): dashboard.php.bak
+NEW IN DEV (Not in PROD): dashboard_corrupted.php
+NEW IN DEV (Not in PROD): dashboard_old.php
+NEW IN DEV (Not in PROD): dashboard_old_utf8.php
+NEW IN DEV (Not in PROD): database/migrations/2026_06_02_add_controle_exportacao_controladores.sql
+NEW IN DEV (Not in PROD): database/migrations/2026_07_24_create_tabela_limites.sql
+NEW IN DEV (Not in PROD): database/migrations/rollback/2026_06_02_rollback_controle_exportacao_controladores.sql
+NEW IN DEV (Not in PROD): database/migrations/rollback/2026_07_24_create_tabela_limites.sql
+NEW IN DEV (Not in PROD): diff.txt
+NEW IN DEV (Not in PROD): docs/AUDITORIA_PROD_2026-06-08.md
+NEW IN DEV (Not in PROD): docs/CONTRATO_API.md
+NEW IN DEV (Not in PROD): docs/CONTRATO_ARQUITETURA_PLANTA.md
+NEW IN DEV (Not in PROD): docs/CONTRATO_DASHBOARD_V2.md
+NEW IN DEV (Not in PROD): docs/CONVENCOES.md
+NEW IN DEV (Not in PROD): docs/DEPLOY_CPANEL.md
+NEW IN DEV (Not in PROD): docs/PROJETO_CIP_CLOUD.md
+NEW IN DEV (Not in PROD): docs/RDC.md
+NEW IN DEV (Not in PROD): docs/RELATORIO_FASE2_ECONOMIA_20260719.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-03_sessao_consolidada_.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-04_00-01.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-04_17-30.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-05_19-55.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-06 23-55_(encerramento_F1-A).md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-06_00-01.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-06_00-14-38.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-07.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-08.md
+NEW IN DEV (Not in PROD): docs/STATUS_CLOUD_2026-06-09.md
+NEW IN DEV (Not in PROD): docs/correcao_CIP_Firmware.md
+NEW IN DEV (Not in PROD): docs/prompt_ATGY_2026-07-09.txt
+NEW IN DEV (Not in PROD): docs/retmoada_2026-0-02.txt
+NEW IN DEV (Not in PROD): docs/retmoada_2026-07-16.txt
+NEW IN DEV (Not in PROD): fix_dashboard.py
+NEW IN DEV (Not in PROD): fix_git.php
+NEW IN DEV (Not in PROD): html_block.txt
+NEW IN DEV (Not in PROD): includes/app_header.php.bak
+NEW IN DEV (Not in PROD): infografico_old.php
+NEW IN DEV (Not in PROD): js_block.txt
+NEW IN DEV (Not in PROD): migrations/2026_06_07_add_potencia_nominal_pico_controladores.sql
+NEW IN DEV (Not in PROD): patch.php
+NEW IN DEV (Not in PROD): patch2.php
+NEW IN DEV (Not in PROD): patch3.php
+NEW IN DEV (Not in PROD): patch4.py
+NEW IN DEV (Not in PROD): patch_1007.sql
+NEW IN DEV (Not in PROD): patch_dashboard.py
+NEW IN DEV (Not in PROD): patch_inversor.sql
+NEW IN DEV (Not in PROD): patch_inversor_14_07.sql
+NEW IN DEV (Not in PROD): patch_inversor_15_07.sql
+NEW IN DEV (Not in PROD): patch_inversor_15_07_final.sql
+NEW IN DEV (Not in PROD): patch_inversor_17_07.sql
+NEW IN DEV (Not in PROD): patch_inversor_17_07_v2.sql
+NEW IN DEV (Not in PROD): patch_inversor_18_07.sql
+NEW IN DEV (Not in PROD): patch_inversor_18_07_final.sql
+NEW IN DEV (Not in PROD): patch_inversor_19_07.sql
+NEW IN DEV (Not in PROD): patch_inversor_19_07_tarde.sql
+NEW IN DEV (Not in PROD): patch_producao.sql
+NEW IN DEV (Not in PROD): patch_producao_10_07.sql
+NEW IN DEV (Not in PROD): peek_solis.py
+NEW IN DEV (Not in PROD): peek_solis.txt
+NEW IN DEV (Not in PROD): php.ini
+NEW IN DEV (Not in PROD): run_test.php
+NEW IN DEV (Not in PROD): scratch_query.py
+NEW IN DEV (Not in PROD): scratch_query2.py
+NEW IN DEV (Not in PROD): scratch_query3.py
+NEW IN DEV (Not in PROD): scratch_query4.py
+NEW IN DEV (Not in PROD): scratch_query5.py
+NEW IN DEV (Not in PROD): scratch_query_result.txt
+NEW IN DEV (Not in PROD): scratch_query_result2.txt
+NEW IN DEV (Not in PROD): scratch_query_result3.txt
+NEW IN DEV (Not in PROD): scratch_query_result4.txt
+NEW IN DEV (Not in PROD): scratch_query_result5.txt
+NEW IN DEV (Not in PROD): temp_js.html
+NEW IN DEV (Not in PROD): test.js
+NEW IN DEV (Not in PROD): test_count.php
+NEW IN DEV (Not in PROD): test_dates.php
+NEW IN DEV (Not in PROD): test_eco.php
+NEW IN DEV (Not in PROD): test_economia.php
+NEW IN DEV (Not in PROD): test_economia2.php
+NEW IN DEV (Not in PROD): test_headers.php
+NEW IN DEV (Not in PROD): test_infografico.php
+NEW IN DEV (Not in PROD): test_interp.py
+NEW IN DEV (Not in PROD): test_pico.php
+NEW IN DEV (Not in PROD): test_tz.php
+NEW IN DEV (Not in PROD): test_verify.php
+NEW IN DEV (Not in PROD): uploads/.gitkeep
+NEW IN PROD (Not in DEV): .last_deploy
+NEW IN PROD (Not in DEV): api/sync/error_log
+NEW IN PROD (Not in DEV): api/v1/cip/error_log
+NEW IN PROD (Not in DEV): docs/changelog.md
+NEW IN PROD (Not in DEV): docs/database_inicial.sql
+NEW IN PROD (Not in DEV): docs/status.md
+NEW IN PROD (Not in DEV): storage/install.lock
+NEW IN PROD (Not in DEV): storage/sessions/auth.php
+NEW IN PROD (Not in DEV): storage/sessions/security.php
+NEW IN PROD (Not in DEV): storage/sessions/sess_00814813a7fa7ac04bd2618f959c8d71
+NEW IN PROD (Not in DEV): storage/sessions/sess_0b767f979099de0402f2abbb13b39293
+NEW IN PROD (Not in DEV): storage/sessions/sess_0f0985eadd1465ef621f6a19e0bda27a
+NEW IN PROD (Not in DEV): storage/sessions/sess_1109e1afab1f9b1748864cb88132c041
+NEW IN PROD (Not in DEV): storage/sessions/sess_133588f6285e06d2f4fa2b3399badb4e
+NEW IN PROD (Not in DEV): storage/sessions/sess_257f65a361f636db2a15976c3b8b8e66
+NEW IN PROD (Not in DEV): storage/sessions/sess_2777869b8515e6e76e3fbcbe1704d267
+NEW IN PROD (Not in DEV): storage/sessions/sess_2a4867e1dff86ee95d476ad0120cdd9d
+NEW IN PROD (Not in DEV): storage/sessions/sess_2c84a6de4dacd429fe65a14c299a065a
+NEW IN PROD (Not in DEV): storage/sessions/sess_2eb96aeea133395e9e68b62662f6c148
+NEW IN PROD (Not in DEV): storage/sessions/sess_37bd91f3ca73f1b6dd33bcbd650f7e41
+NEW IN PROD (Not in DEV): storage/sessions/sess_46919f518cc9cc3d86f9c28bbb56c9a1
+NEW IN PROD (Not in DEV): storage/sessions/sess_4fd8016d16a90a482a023b58928bab44
+NEW IN PROD (Not in DEV): storage/sessions/sess_6445336946e8506401154727a40bf020
+NEW IN PROD (Not in DEV): storage/sessions/sess_73eb150c86374b14ed63691343b44ed8
+NEW IN PROD (Not in DEV): storage/sessions/sess_74376175fdbd2ae7fc22247c493a7065
+NEW IN PROD (Not in DEV): storage/sessions/sess_77d30ac18ab7c4be1230bead756b4090
+NEW IN PROD (Not in DEV): storage/sessions/sess_78951bd85c875d44e0fe733c60434a48
+NEW IN PROD (Not in DEV): storage/sessions/sess_7896df9a5a7faec0e63eb02cf067ca9f
+NEW IN PROD (Not in DEV): storage/sessions/sess_7a4eca308175b1e95f380429ca0c3b9e
+NEW IN PROD (Not in DEV): storage/sessions/sess_7f91e01a8c9fb8cb269a200f8bbb06ee
+NEW IN PROD (Not in DEV): storage/sessions/sess_8765fb20ec0f247eced567a90e9bc3f3
+NEW IN PROD (Not in DEV): storage/sessions/sess_8e6096a3d1f6be9e7e4ed47eb9e758cb
+NEW IN PROD (Not in DEV): storage/sessions/sess_96465f108a1037f503ff9ad445895eb5
+NEW IN PROD (Not in DEV): storage/sessions/sess_97b62058738b5520ebd9f49bbdc8e862
+NEW IN PROD (Not in DEV): storage/sessions/sess_9bfd958d81813e3894b51c4c5bd67f1d
+NEW IN PROD (Not in DEV): storage/sessions/sess_9d8ee77d5c3942c0bbd0181a4d80e446
+NEW IN PROD (Not in DEV): storage/sessions/sess_aa5da6a81f60a1825af05ac7acd0836a
+NEW IN PROD (Not in DEV): storage/sessions/sess_b23a1448d9bd83a3a107cb7eea821ddb
+NEW IN PROD (Not in DEV): storage/sessions/sess_b4d96bda16ea89211c4b2ed660b940e5
+NEW IN PROD (Not in DEV): storage/sessions/sess_bac9cd13cf69c4295bb8b03aca1a00f2
+NEW IN PROD (Not in DEV): storage/sessions/sess_bad0d4d8c112db41a61e4a25b02bdc2f
+NEW IN PROD (Not in DEV): storage/sessions/sess_bd0e1c528f416f9b83931ca462a06a69
+NEW IN PROD (Not in DEV): storage/sessions/sess_c04e020b687424454bd7dbfeedfe4149
+NEW IN PROD (Not in DEV): storage/sessions/sess_d58189cd28b364ca43d49b60598687da
+NEW IN PROD (Not in DEV): storage/sessions/sess_d775df1904e98656286f869e0b1ff71b
+NEW IN PROD (Not in DEV): storage/sessions/sess_d98b2a3f055d1738fd9de8b7ba6ac0be
+NEW IN PROD (Not in DEV): storage/sessions/sess_deadeb7cdeec36b5ac019a18048c7fe9
+NEW IN PROD (Not in DEV): storage/sessions/sess_e86c1998285e0fd717b33a77a44745c8
+NEW IN PROD (Not in DEV): storage/sessions/sess_f5aaf4eed88d12697a46f647b108a039
+NEW IN PROD (Not in DEV): storage/sessions/sess_f94c2b64e764f3938e9e6b5638375a73
+NEW IN PROD (Not in DEV): storage/sessions/sess_fc9c683681047b7f860a4714ef54f408

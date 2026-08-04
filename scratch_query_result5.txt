@@ -1,0 +1,4 @@
+=== RESULTADO DA QUERY DE VALIDACAO ===
+linhas_alvo (pos 22/06): 1631
+negativos_restantes (pos 22/06): 81
+registros_com_consumo_null: 10

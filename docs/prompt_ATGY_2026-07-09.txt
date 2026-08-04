@@ -1,0 +1,8 @@
+Olá! Vamos retomar a configuração do Git Version Control no cPanel (HostGator).
+
+Contexto de onde paramos:
+1. O painel web (monitor.aeonium.com.br) está online, o problema da sessão foi resolvido forçando o caminho em app.php, e o gráfico de energia já exibe quedas para zero em caso de gaps (energia.php).
+2. O script de deploy (.cpanel.yml) já foi corrigido no GitHub para NUNCA apagar o .user.ini e o env.php usando o comando rsync --exclude.
+3. Nosso único objetivo hoje é destravar o Git Version Control no cPanel. Para isso, precisamos remover o vínculo antigo e criar um novo repositório isolado (com o "Repository Path" chamado "cipcloud_repo"), permitindo que o .cpanel.yml faça o deploy automático para a pasta pública.
+
+Pode me guiar com o passo-a-passo exato para recriarmos o repositório no cPanel agora?

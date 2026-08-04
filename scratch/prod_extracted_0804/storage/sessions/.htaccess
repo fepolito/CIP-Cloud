@@ -1,0 +1,4 @@
+# Arquivo: storage/.htaccess
+# Objetivo: Bloquear qualquer acesso web ao diretório storage
+
+Require all denied

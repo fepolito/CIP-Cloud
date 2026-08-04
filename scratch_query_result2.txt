@@ -1,0 +1,3 @@
+=== RESULTADO DA QUERY DE TESTE ===
+linhas_alvo: 11949
+negativos_restantes: 2537

@@ -1,0 +1,80 @@
+/**
+ * Arquivo: assets/css/usuarios.css
+ * Projeto: Controlador de Injeção de Potência Elétrica
+ * Objetivo: Estilos específicos da tela de gerenciamento de usuários.
+ *
+ * Dependências de hardware:
+ * - Servidor web para entrega de arquivos estáticos
+ * - Navegador com suporte a CSS moderno
+ *
+ * Dependências de software/arquivos instalados:
+ * - assets/css/app.css
+ * - usuarios.php
+ *
+ * Histórico de implementações:
+ * - 2026-03-21: criação da folha de estilos específica do módulo de usuários
+ * - 2026-03-22: adequação para uso em conjunto com a folha global app.css
+ */
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.card {
+    padding: 20px;
+}
+
+.card-label {
+    display: block;
+    color: var(--cor-texto-suave);
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.card-value {
+    font-size: 30px;
+}
+
+.content-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.form-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.table-users {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 950px;
+}
+
+.table-users th,
+.table-users td {
+    text-align: left;
+    padding: 12px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+    font-size: 14px;
+}
+
+.table-users th {
+    background: var(--cor-superficie-suave);
+}
+
+@media (max-width: 1024px) {
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cards {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,14 @@
+📌 Estado real ao pausar
+Objetivo original: recuperar o dashboard (Balanço Energético / infográfico SVG + semáforo de status).
+O que foi aplicado: patches em app_header.php (v2.2.0) e dashboard.php (v1.14.0) — reintegração do SVG do _old + semáforo autônomo.
+Resultado: não efetivo — dashboard não foi recuperado como esperado. (Sintoma específico ainda não capturado — sem console/print.)
+🔎 Para a próxima sessão — o que vai destravar rápido
+Quando retomar, me traga um destes (qualquer um já resolve o diagnóstico às cegas atual):
+
+O que exatamente quebrou — tela branca? SVG invisível? erro no console (F12)? layout desalinhado? dados não carregam?
+Print ou log do console na página dashboard em PROD.
+Se preferir, o dashboard.php atual pós-patch — comparo com o que deveria ter ficado.
+Suspeito honesto (sem dado, é hipótese): a reintegração do SVG do _old pode ter colidido com estrutura/CSS do dashboard atual, ou o #cards-host { margin-top } do 2B ficou inconsistente. Vale considerar git revert / restaurar backup do dashboard.php e reabordar em passos menores — um bloco por vez, validando visualmente a cada etapa.
+
+🧠 RDC (registro de pausa)
+CIP-DEC-20260716-012 — Reintegração do Balanço via patch único não foi efetiva; recuperação do dashboard suspensa aguardando diagnóstico visual (console/print). Reabordar incrementalmente — Registrada 📝
