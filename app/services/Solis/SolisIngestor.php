@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       app/services/Solis/SolisIngestor.php
- * @versao        1.1.0
+ * @versao        1.1.1
  * @modificado_em 2026-08-05
  * @objetivo      Coleta inverterList (paginado), faz upsert de inversores e
  *                INSERT-if-null em telemetria_5min_inversor/_string e telemetria_5min.
@@ -142,7 +142,7 @@ final class SolisIngestor
      * Calcula o delta de geracao (kWh) para o controlador subtraindo
      * o valor atual da energia_geracao_total_kwh (Solis) com o ultimo bucket conhecido.
      */
-    private function energiaGeracaoDelta(int $ctrl, string $bucket, float $etotalSoma): ?float
+    private function energiaGeracaoDelta(int $ctrl, string $bucket, float $etotalSoma): float
     {
         $sql = "SELECT energia_geracao_total_kwh 
                   FROM telemetria_5min 
@@ -155,11 +155,11 @@ final class SolisIngestor
         $lastEtotal = $st->fetchColumn();
 
         if ($lastEtotal === false) {
-            return null;
+            return 0.0;                     // 1o bucket -> 0.0 (era null)
         }
 
         $delta = $etotalSoma - (float)$lastEtotal;
-        return $delta >= 0 ? round($delta, 4) : 0.0;
+        return ($delta >= 0 && $delta < 1000) ? round($delta, 4) : 0.0;  // teto anti-rollover
     }
 
     private function upsertInversor(array $r): int
