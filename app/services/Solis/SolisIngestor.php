@@ -1,11 +1,11 @@
 <?php
 /**
  * @arquivo       app/services/Solis/SolisIngestor.php
- * @versao        1.0.0
- * @modificado_em 2026-08-04
+ * @versao        1.1.0
+ * @modificado_em 2026-08-05
  * @objetivo      Coleta inverterList (paginado), faz upsert de inversores e
  *                INSERT-if-null em telemetria_5min_inversor/_string e telemetria_5min.
- *                Usa pac1/etoday1/etotal1 (campos normalizados) e bucket defasado.
+ *                Usa pac1/etoday1/etotal1 e separa delta (energia_geracao_kwh) do acumulado (energia_geracao_total_kwh).
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
@@ -116,22 +116,50 @@ final class SolisIngestor
         $ins = $this->pdo->prepare("
           INSERT INTO telemetria_5min
             (controlador_id, timestamp_utc, potencia_geracao_w,
-             energia_geracao_kwh, status_inversor, geracao_origem, qualidade_dado)
-          VALUES (:ctrl,:ts,:pac,:etot,:st,'api_externa',80)
+             energia_geracao_kwh, energia_geracao_total_kwh, status_inversor, geracao_origem, qualidade_dado)
+          VALUES (:ctrl,:ts,:pac,:delta,:etot,:st,'api_externa',80)
           ON DUPLICATE KEY UPDATE id=id"); // ESP (se ja gravou) vence
 
         $n = 0;
         foreach ($rows as $r) {
+            $etot = (float)$r['etot_kwh'];
+            $delta = $this->energiaGeracaoDelta((int)$r['ctrl'], $bucket, $etot);
+            
             $ins->execute([
-                ':ctrl' => (int)$r['ctrl'],
-                ':ts'   => $bucket,
-                ':pac'  => (float)$r['pac_w'],
-                ':etot' => (float)$r['etot_kwh'],
-                ':st'   => (string)($r['estado'] ?? ''),
+                ':ctrl'  => (int)$r['ctrl'],
+                ':ts'    => $bucket,
+                ':pac'   => (float)$r['pac_w'],
+                ':delta' => $delta,
+                ':etot'  => $etot,
+                ':st'    => (string)($r['estado'] ?? ''),
             ]);
             $n++;
         }
         return $n;
+    }
+
+    /**
+     * Calcula o delta de geracao (kWh) para o controlador subtraindo
+     * o valor atual da energia_geracao_total_kwh (Solis) com o ultimo bucket conhecido.
+     */
+    private function energiaGeracaoDelta(int $ctrl, string $bucket, float $etotalSoma): ?float
+    {
+        $sql = "SELECT energia_geracao_total_kwh 
+                  FROM telemetria_5min 
+                 WHERE controlador_id = :ctrl 
+                   AND timestamp_utc < :ts 
+                   AND energia_geracao_total_kwh IS NOT NULL
+                 ORDER BY timestamp_utc DESC LIMIT 1";
+        $st = $this->pdo->prepare($sql);
+        $st->execute([':ctrl' => $ctrl, ':ts' => $bucket]);
+        $lastEtotal = $st->fetchColumn();
+
+        if ($lastEtotal === false) {
+            return null;
+        }
+
+        $delta = $etotalSoma - (float)$lastEtotal;
+        return $delta >= 0 ? round($delta, 4) : 0.0;
     }
 
     private function upsertInversor(array $r): int
