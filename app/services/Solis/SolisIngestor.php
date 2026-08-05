@@ -89,7 +89,49 @@ final class SolisIngestor
             $page++;
         } while ($page <= $pages);
 
+        $stats['agregado'] = $this->aggregateToController($bucket);
+
         return ['bucket_utc' => $bucket] + $stats;
+    }
+
+    /** Agrega inversores por controlador → telemetria_5min (INSERT-if-null; ESP vence). */
+    private function aggregateToController(string $bucket): int
+    {
+        // Soma potencia/energia dos inversores vinculados a cada controlador.
+        $sql = "
+          SELECT i.controlador_id AS ctrl,
+                 SUM(t.potencia_ac_w)     AS pac_w,
+                 SUM(t.energia_total_kwh) AS etot_kwh,
+                 MAX(t.estado)            AS estado
+            FROM telemetria_5min_inversor t
+            JOIN inversores i ON i.id = t.inversor_id
+           WHERE t.timestamp_utc = :ts
+             AND i.controlador_id IS NOT NULL
+             AND i.ativo = 1
+           GROUP BY i.controlador_id";
+        $sel = $this->pdo->prepare($sql);
+        $sel->execute([':ts' => $bucket]);
+        $rows = $sel->fetchAll(PDO::FETCH_ASSOC);
+
+        $ins = $this->pdo->prepare("
+          INSERT INTO telemetria_5min
+            (controlador_id, timestamp_utc, potencia_geracao_w,
+             energia_geracao_kwh, status_inversor, geracao_origem, qualidade_dado)
+          VALUES (:ctrl,:ts,:pac,:etot,:st,'api_externa',80)
+          ON DUPLICATE KEY UPDATE id=id"); // ESP (se ja gravou) vence
+
+        $n = 0;
+        foreach ($rows as $r) {
+            $ins->execute([
+                ':ctrl' => (int)$r['ctrl'],
+                ':ts'   => $bucket,
+                ':pac'  => (float)$r['pac_w'],
+                ':etot' => (float)$r['etot_kwh'],
+                ':st'   => (string)($r['estado'] ?? ''),
+            ]);
+            $n++;
+        }
+        return $n;
     }
 
     private function upsertInversor(array $r): int
