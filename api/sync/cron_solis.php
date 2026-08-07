@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       api/sync/cron_solis.php
- * @versao        1.1.0
- * @modificado_em 2026-08-05
+ * @versao        1.1.1
+ * @modificado_em 2026-08-07
  * @objetivo      Endpoint/CLI de cron (5min) que dispara SolisIngestor.
  *                HTTP exige token; CLI (php-cli) é liberado (ambiente confiável).
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -46,6 +46,12 @@ try {
 } catch (Throwable $e) {
     if (!$isCli) { http_response_code(500); }
     echo json_encode(['erro' => 'ingestor_falhou']);
-    @error_log('[solis_cron] ' . $e->getMessage());
+    
+    if (str_contains($e->getMessage(), 'refused') || str_contains($e->getMessage(), '13333')) {
+        @error_log('[solis_cron] aguardando liberacao porta 13333 (esperado)');
+    } else {
+        @error_log('[solis_cron] Solis API erro: ' . $e->getMessage());
+    }
+
     if ($isCli) { fwrite(STDERR, PHP_EOL . $e->getMessage() . PHP_EOL); } // debug visível em DEV
 }
