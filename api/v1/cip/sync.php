@@ -10,7 +10,7 @@
  */
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../../config/env.php'; // Ou config/app.php dependendo de onde o isDev esta configurado
+require_once __DIR__ . '/../../config/env.php'; // Ou config/app.php dependendo de onde o isDev esta configurado
 require_once __DIR__ . '/../../../config/database.php';
 require_once __DIR__ . '/../../../app/services/HmacAuth.php';
 require_once __DIR__ . '/../../../app/services/LimitesSync.php';
