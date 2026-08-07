@@ -33,6 +33,10 @@ function erro(int $code, string $msg, ?string $detalhe = null): never
     if ($isDev && $detalhe !== null) {
         $out['detalhe'] = $detalhe;
     }
+
+    $logMsg = "[sync_erro] $code - $msg" . ($detalhe ? " | Detalhe: $detalhe" : "");
+    @error_log($logMsg);
+
     responder($code, $out);
 }
 
