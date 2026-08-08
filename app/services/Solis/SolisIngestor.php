@@ -89,7 +89,8 @@ final class SolisIngestor
             $page++;
         } while ($page <= $pages);
 
-        $stats['agregado'] = $this->aggregateToController($bucket);
+        // $stats['agregado'] = $this->aggregateToController($bucket);
+        $stats['agregado'] = 0;
 
         return ['bucket_utc' => $bucket] + $stats;
     }
