@@ -56,6 +56,10 @@ $token_hash = hash('sha256', $token_raw);
 // ─── 3. Body ────────────────────────────────────────────────
 $raw  = file_get_contents('php://input');
 $data = json_decode($raw, true);
+
+// TODO: Remover após o debug
+error_log("[telemetria] Payload recebido: " . $raw);
+
 if (!is_array($data) || empty($data['serial'])) {
     reply(400, ['ok' => false, 'error' => 'invalid_json_or_missing_serial']);
 }
