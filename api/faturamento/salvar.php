@@ -97,8 +97,8 @@ try {
         ':dias' => $diasFat,
         ':imp'  => (float)($in['energia_importada_kwh'] ?? 0),
         ':inj'  => (float)($in['energia_injetada_kwh'] ?? 0),
-        ':rant' => isset($in['leitura_ant_registro']) ? (float)$in['leitura_ant_registro'] : null,
-        ':ratual' => isset($in['leitura_atual_registro']) ? (float)$in['leitura_atual_registro'] : null,
+        ':rant' => (isset($in['leitura_ant_registro']) && $in['leitura_ant_registro'] !== '') ? (float)$in['leitura_ant_registro'] : null,
+        ':ratual' => (isset($in['leitura_atual_registro']) && $in['leitura_atual_registro'] !== '') ? (float)$in['leitura_atual_registro'] : null,
         ':obs'  => $in['observacao'] ?? null,
     ]);
 
@@ -106,6 +106,9 @@ try {
 
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode(['erro' => 'Erro ao salvar']
-        + (($_ENV['APP_ENV'] ?? '') === 'dev' ? ['detalhe' => $e->getMessage()] : []));
+    $resp = ['erro' => 'Erro ao salvar'];
+    if (defined('APP_ENV') && APP_ENV === 'development') {
+        $resp['detalhe'] = $e->getMessage();
+    }
+    echo json_encode($resp, JSON_UNESCAPED_UNICODE);
 }
