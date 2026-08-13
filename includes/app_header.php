@@ -23,6 +23,8 @@
  *   2026-04-15  v2.1.0  [FIX] Adicionado energia.php no menu
  *                        hambúrguer. Corrigido id 'dashboard'
  *                        para bater com $appPaginaAtual das páginas.
+ *   2026-08-12  v2.3.0  Patch CIP-DEC-20260812-009: adicionado faturamento.php
+ *                        ao menu hamburguer (conciliacao fatura x telemetria).
  *   2026-06-07  vB1.0.0  Patch B1: portado padrao multi-tenant de energia.php
  *   2026-07-18  vB1.1.0  Patch CIP-DEC-20260718-001 (Forçar UTC no ping) e
  *                        Ajuste do seletor p/ mobile.
@@ -83,6 +85,7 @@ $_menuItems = [
     ['href' => 'geracao.php',          'icon' => '🔆', 'label' => 'Geração',   'id' => 'geracao'],
     ['href' => 'historico.php',        'icon' => '📈', 'label' => 'Histórico', 'id' => 'historico'],
     ['href' => 'tarifas.php',          'icon' => '💰', 'label' => 'Tarifas',   'id' => 'tarifas'],
+    ['href' => 'faturamento.php',      'icon' => '🧾', 'label' => 'Faturamento', 'id' => 'faturamento'], // ✅ CIP-DEC-20260812-009
     ['href' => 'limites.php', 'icon' => '🔧', 'label' => 'Limites',   'id' => 'limites'],
 ];
 

@@ -1,27 +1,26 @@
 <?php
 /**
  * @arquivo       api/energia/economia.php
- * @versao        1.3.0
- * @modificado_em 2026-07-19
+ * @versao        1.3.1
+ * @modificado_em 2026-08-13
  * @objetivo      Endpoint financeiro: economia estimada do dia e do mes (autoconsumo +
  *                crédito de injeção) via TarifaService, agora com variação %. Query própria, tenant-aware.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
 
-$is_dev = true; // FORCE DEV TO SEE ERROR
-if ($is_dev) {
-    ini_set('display_errors', '1');
-} else {
-    ini_set('display_errors', '0');
-}
+require_once __DIR__ . '/../../config/app.php';
+
+// Ambiente detectado por config/app.php (por host: .test/.local/IP privado).
+// PROD ('production') nunca exibe erros ao cliente.
+$is_dev = (defined('APP_ENV') && APP_ENV === 'development');
+ini_set('display_errors', $is_dev ? '1' : '0');
 error_reporting(E_ALL);
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-cache, must-revalidate');
 
-require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/helpers/Tenant.php';

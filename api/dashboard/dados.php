@@ -110,18 +110,18 @@ try {
 // ─────────────────────────────────────────────────────────────
 $sql_atual = "
     SELECT
-        tensao_v,
-        corrente_a,
-        potencia_kw,
-        energia_kwh,
-        frequencia_hz,
-        fator_potencia,
-        tipo_leitura,
-        fase,
-        timestamp_medicao
-    FROM leituras_energia
+        tensao_rede_v AS tensao_v,
+        NULL AS corrente_a, -- Na nova tabela temos corrente por fase, no total
+        potencia_importada_w - potencia_exportada_w AS potencia_rede_w,
+        energia_importada_kwh AS energia_kwh,
+        frequencia_rede_hz AS frequencia_hz,
+        fator_potencia_total AS fator_potencia,
+        'medidor' AS tipo_leitura,
+        'total' AS fase,
+        timestamp_utc AS timestamp_medicao
+    FROM telemetria_5min
     WHERE controlador_id = :cid
-    ORDER BY timestamp_medicao DESC
+    ORDER BY timestamp_utc DESC
     LIMIT 1
 ";
 
@@ -135,8 +135,8 @@ if ($atual_raw) {
     $atual = [
         'tensao_v'          => $atual_raw['tensao_v'],
         'corrente_a'        => $atual_raw['corrente_a'],
-        'potencia_w'        => $atual_raw['potencia_kw'] !== null
-                                ? (float)$atual_raw['potencia_kw'] * 1000
+        'potencia_w'        => $atual_raw['potencia_rede_w'] !== null
+                                ? (float)$atual_raw['potencia_rede_w']
                                 : null,
         'energia_kwh'       => $atual_raw['energia_kwh'],
         'frequencia_hz'     => $atual_raw['frequencia_hz'],
@@ -152,17 +152,17 @@ if ($atual_raw) {
 // ─────────────────────────────────────────────────────────────
 $sql_totais = "
     SELECT
-        MIN(tensao_v)                        AS tensao_min,
-        MAX(tensao_v)                        AS tensao_max,
-        AVG(tensao_v)                        AS tensao_media,
-        MAX(potencia_kw) * 1000              AS potencia_max,
-        AVG(potencia_kw) * 1000              AS potencia_media,
-        AVG(fator_potencia)                  AS fp_medio,
+        MIN(tensao_rede_v)                   AS tensao_min,
+        MAX(tensao_rede_v)                   AS tensao_max,
+        AVG(tensao_rede_v)                   AS tensao_media,
+        MAX(potencia_importada_w - potencia_exportada_w) AS potencia_max,
+        AVG(potencia_importada_w - potencia_exportada_w) AS potencia_media,
+        AVG(fator_potencia_total)            AS fp_medio,
         COUNT(*)                             AS total_leituras,
-        MAX(energia_kwh)                     AS energia_kwh_max
-    FROM leituras_energia
+        MAX(energia_importada_kwh)           AS energia_kwh_max
+    FROM telemetria_5min
     WHERE controlador_id = :cid
-      AND DATE(timestamp_medicao) = CURDATE()
+      AND DATE(timestamp_utc) = CURDATE()
 ";
 
 $stmt = $pdo->prepare($sql_totais);
@@ -187,16 +187,18 @@ $totais = [
 // ─────────────────────────────────────────────────────────────
 $sql_series = "
     SELECT
-        UNIX_TIMESTAMP(timestamp_medicao) * 1000  AS ts_ms,
-        tensao_v,
-        corrente_a,
-        potencia_kw * 1000                        AS potencia_w,
-        frequencia_hz,
-        fator_potencia
-    FROM leituras_energia
+        UNIX_TIMESTAMP(timestamp_utc) * 1000  AS ts_ms,
+        tensao_rede_v AS tensao_v,
+        NULL AS corrente_a,
+        (potencia_importada_w - potencia_exportada_w) AS potencia_w,
+        frequencia_rede_hz AS frequencia_hz,
+        fator_potencia_total AS fator_potencia,
+        -- Adicionando geração apenas caso a view consuma (se no futuro o chart suportar duas linhas)
+        potencia_geracao_w
+    FROM telemetria_5min
     WHERE controlador_id = :cid
-      AND timestamp_medicao >= NOW() - INTERVAL {$intervalo_sql}
-    ORDER BY timestamp_medicao ASC
+      AND timestamp_utc >= NOW() - INTERVAL {$intervalo_sql}
+    ORDER BY timestamp_utc ASC
     LIMIT 500
 ";
 
