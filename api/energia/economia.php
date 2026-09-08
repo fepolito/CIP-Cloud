@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       api/energia/economia.php
- * @versao        1.3.1
- * @modificado_em 2026-08-13
+ * @versao        1.3.2
+ * @modificado_em 2026-09-08
  * @objetivo      Endpoint financeiro: economia estimada do dia e do mes (autoconsumo +
  *                crédito de injeção) via TarifaService, agora com variação %. Query própria, tenant-aware.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
@@ -47,19 +47,31 @@ if ($controladorId === false || $controladorId === null || $controladorId <= 0) 
  * Calcula economia (R$) de UMA janela [iniUtc, fimUtc).
  * Reaproveita $sqlData + TarifaService intactos.
  */
-function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $fimUtc, float $tarifaKwh, float $fatorInjecao): array {
+function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $fimUtc, float $tarifaKwh, float $fatorInjecao, string $tzStr): array {
     $sqlData = "
         SELECT 
-          COUNT(*) AS n_registros,
-          COALESCE(SUM(energia_geracao_kwh), 0) AS geracao_kwh,
-          COALESCE(MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh), 0) AS exportada_kwh
-        FROM telemetria_5min
-        WHERE controlador_id = :ctrl_id
-          AND timestamp_utc >= :ini
-          AND timestamp_utc <  :fim
+          (SELECT COUNT(*) FROM telemetria_5min WHERE controlador_id = :ctrl_id AND timestamp_utc >= :ini AND timestamp_utc < :fim) AS n_registros,
+          COALESCE((
+            SELECT SUM(geracao_dia) FROM (
+              SELECT MAX(energia_geracao_kwh) AS geracao_dia
+              FROM telemetria_5min
+              WHERE controlador_id = :ctrl_id 
+                AND timestamp_utc >= :ini 
+                AND timestamp_utc < :fim
+                AND energia_geracao_kwh IS NOT NULL
+              GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz))
+            ) AS t_dias
+          ), 0) AS geracao_kwh,
+          COALESCE((
+            SELECT MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)
+            FROM telemetria_5min
+            WHERE controlador_id = :ctrl_id 
+              AND timestamp_utc >= :ini 
+              AND timestamp_utc < :fim
+          ), 0) AS exportada_kwh
     ";
     $st = $pdo->prepare($sqlData);
-    $st->execute([':ctrl_id' => $ctrlId, ':ini' => $iniUtc, ':fim' => $fimUtc]);
+    $st->execute([':ctrl_id' => $ctrlId, ':ini' => $iniUtc, ':fim' => $fimUtc, ':tz' => $tzStr]);
     $data = $st->fetch(PDO::FETCH_ASSOC) ?: ['n_registros' => 0, 'geracao_kwh' => 0, 'exportada_kwh' => 0];
     
     $geracaoKwh   = (float)$data['geracao_kwh'];
@@ -166,7 +178,7 @@ try {
     $iniUtc = $ini->setTimezone($utc)->format('Y-m-d H:i:s');
     $fimUtc = $fim->setTimezone($utc)->format('Y-m-d H:i:s');
     
-    $atual = calcularEconomiaJanela($pdo, (int)$controladorId, $iniUtc, $fimUtc, $tarifaKwh, $fatorInjecao);
+    $atual = calcularEconomiaJanela($pdo, (int)$controladorId, $iniUtc, $fimUtc, $tarifaKwh, $fatorInjecao, $tzStr);
     
     $resp = $atual;
     $resp['ref'] = $ref !== '' ? $ref : ($periodo === 'mes' ? $ini->format('Y-m') : $ini->format('Y-m-d'));
@@ -175,7 +187,7 @@ try {
     if ($comparar) {
         $iniAntUtc = $iniAnt->setTimezone($utc)->format('Y-m-d H:i:s');
         $fimAntUtc = $fimAnt->setTimezone($utc)->format('Y-m-d H:i:s');
-        $ant = calcularEconomiaJanela($pdo, (int)$controladorId, $iniAntUtc, $fimAntUtc, $tarifaKwh, $fatorInjecao);
+        $ant = calcularEconomiaJanela($pdo, (int)$controladorId, $iniAntUtc, $fimAntUtc, $tarifaKwh, $fatorInjecao, $tzStr);
 
         $tAtual = (float)($atual['total'] ?? 0);
         $tAnt   = (float)($ant['total'] ?? 0);

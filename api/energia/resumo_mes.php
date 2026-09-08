@@ -2,8 +2,8 @@
 // ============================================================
 // Projeto      : CIP - Controlador de Injecao de Potencia Eletrica
 // Arquivo      : api/energia/resumo_mes.php
-// Versao       : v1.0.0
-// Data         : 2026-06-07
+// Versao       : v1.0.1
+// Data         : 2026-09-08
 // Objetivo     : Retornar agregado do mes corrente com projecao
 // Dependencias : config/app.php, config/database.php, app/auth.php, app/helpers/Tenant.php
 // Tabelas      : controladores, telemetria_5min
@@ -120,9 +120,9 @@ try {
           SELECT 
             MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_dia,
             MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_dia,
-            SUM(energia_geracao_kwh) AS geracao_dia,
+            MAX(energia_geracao_kwh) AS geracao_dia,
             (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
-            COALESCE(SUM(energia_geracao_kwh), 0) -
+            COALESCE(MAX(energia_geracao_kwh), 0) -
             (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia,
             AVG(potencia_importada_w) AS pot_media_importada_w,
             AVG(potencia_exportada_w) AS pot_media_exportada_w,

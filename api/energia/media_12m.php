@@ -2,8 +2,8 @@
 // ============================================================
 // Projeto      : CIP - Controlador de Injecao de Potencia Eletrica
 // Arquivo      : api/energia/media_12m.php
-// Versao       : v1.0.0
-// Data         : 2026-06-07
+// Versao       : v1.0.1
+// Data         : 2026-09-08
 // Objetivo     : Retornar media de consumo dos ultimos 12 meses fechados e delta com mes corrente
 // Dependencias : config/app.php, config/database.php, app/auth.php, app/helpers/Tenant.php
 // Tabelas      : controladores, telemetria_5min
@@ -109,9 +109,9 @@ try {
             DATE_FORMAT(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str), '%Y-%m') AS mes_ref,
             MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_dia,
             MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_dia,
-            COALESCE(SUM(energia_geracao_kwh), 0)   AS geracao_dia,
+            COALESCE(MAX(energia_geracao_kwh), 0)   AS geracao_dia,
             (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
-            COALESCE(SUM(energia_geracao_kwh), 0) -
+            COALESCE(MAX(energia_geracao_kwh), 0) -
             (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia,
             -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
             COUNT(energia_geracao_kwh) AS amostras_geracao,
@@ -177,7 +177,7 @@ try {
         FROM (
           SELECT 
             (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
-            COALESCE(SUM(energia_geracao_kwh), 0) -
+            COALESCE(MAX(energia_geracao_kwh), 0) -
             (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia
           FROM telemetria_5min
           WHERE controlador_id = :cid
