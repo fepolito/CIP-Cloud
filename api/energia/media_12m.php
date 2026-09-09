@@ -2,7 +2,7 @@
 // ============================================================
 // Projeto      : CIP - Controlador de Injecao de Potencia Eletrica
 // Arquivo      : api/energia/media_12m.php
-// Versao       : v1.0.1
+// Versao       : v1.0.2
 // Data         : 2026-09-08
 // Objetivo     : Retornar media de consumo dos ultimos 12 meses fechados e delta com mes corrente
 // Dependencias : config/app.php, config/database.php, app/auth.php, app/helpers/Tenant.php
@@ -35,6 +35,7 @@ require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/helpers/Tenant.php';
+require_once __DIR__ . '/../../app/helpers/EnergiaCalc.php';
 
 use app\helpers\Tenant;
 
@@ -87,6 +88,7 @@ try {
     }
     
     $tzStr = $controlador['timezone'] ?: 'America/Sao_Paulo';
+  $deltaMax = (float)($controlador['delta_max_kwh'] ?? 2.000);
     try {
         $tz = new DateTimeZone($tzStr);
     } catch (Exception $e) {

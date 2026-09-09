@@ -29,14 +29,18 @@ use app\helpers\Tenant;
 use app\services\TarifaService;
 
 require_once __DIR__ . '/../../app/services/TarifaService.php';
+require_once __DIR__ . '/../../app/helpers/EnergiaCalc.php';
 
 $usuario = authUsuario();
 
 $periodo = (($_GET['periodo'] ?? 'dia') === 'mes') ? 'mes' : 'dia';
 $comparar = (($_GET['comparar'] ?? '0') === '1');
-$ref = trim((string)($_GET['ref'] ?? ''));
+$ref = trim((string)($_GET['ref'] ?? $_GET['data'] ?? ''));
 
 $controladorId = filter_input(INPUT_GET, 'controlador_id', FILTER_VALIDATE_INT);
+if ($controladorId === false || $controladorId === null || $controladorId <= 0) {
+    $controladorId = filter_var($_GET['controlador_id'] ?? null, FILTER_VALIDATE_INT);
+}
 if ($controladorId === false || $controladorId === null || $controladorId <= 0) {
     http_response_code(400);
     echo json_encode(['sucesso' => false, 'erro' => 'Parametro controlador_id ausente ou invalido', 'detalhe' => null], JSON_UNESCAPED_UNICODE);
@@ -47,43 +51,54 @@ if ($controladorId === false || $controladorId === null || $controladorId <= 0) 
  * Calcula economia (R$) de UMA janela [iniUtc, fimUtc).
  * Reaproveita $sqlData + TarifaService intactos.
  */
-function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $fimUtc, float $tarifaKwh, float $fatorInjecao, string $tzStr): array {
-    $sqlData = "
-        SELECT 
-          (SELECT COUNT(*) FROM telemetria_5min WHERE controlador_id = :ctrl_id_1 AND timestamp_utc >= :ini_1 AND timestamp_utc < :fim_1) AS n_registros,
-          COALESCE((
-            SELECT SUM(geracao_dia) FROM (
-              SELECT MAX(energia_geracao_kwh) AS geracao_dia
-              FROM telemetria_5min
-              WHERE controlador_id = :ctrl_id_2 
-                AND timestamp_utc >= :ini_2 
-                AND timestamp_utc < :fim_2
-                AND energia_geracao_kwh IS NOT NULL
-              GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz))
-            ) AS t_dias
-          ), 0) AS geracao_kwh,
-          COALESCE((
-            SELECT MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)
-            FROM telemetria_5min
-            WHERE controlador_id = :ctrl_id_3 
-              AND timestamp_utc >= :ini_3 
-              AND timestamp_utc < :fim_3
-          ), 0) AS exportada_kwh
-    ";
-    $st = $pdo->prepare($sqlData);
-    $st->execute([
-        ':ctrl_id_1' => $ctrlId, ':ini_1' => $iniUtc, ':fim_1' => $fimUtc,
-        ':ctrl_id_2' => $ctrlId, ':ini_2' => $iniUtc, ':fim_2' => $fimUtc,
-        ':ctrl_id_3' => $ctrlId, ':ini_3' => $iniUtc, ':fim_3' => $fimUtc,
-        ':tz' => $tzStr
-    ]);
-    $data = $st->fetch(PDO::FETCH_ASSOC) ?: ['n_registros' => 0, 'geracao_kwh' => 0, 'exportada_kwh' => 0];
+function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $fimUtc, float $tarifaKwh, float $fatorInjecao, string $tzStr, float $deltaMax, float $custoDisp, string $modo): array {
+    // Checar apenas número de registros
+    $st = $pdo->prepare("SELECT COUNT(*) FROM telemetria_5min WHERE controlador_id = :cid AND timestamp_utc >= :ini AND timestamp_utc < :fim");
+    $st->execute([':cid' => $ctrlId, ':ini' => $iniUtc, ':fim' => $fimUtc]);
+    $n_registros = (int)$st->fetchColumn();
+
+    $importadaKwh = EnergiaCalc::somaDeltas($pdo, $ctrlId, $iniUtc, $fimUtc, 'energia_importada_kwh', $deltaMax);
+    $exportadaKwh = EnergiaCalc::somaDeltas($pdo, $ctrlId, $iniUtc, $fimUtc, 'energia_exportada_kwh', $deltaMax);
+    $geracaoKwh   = EnergiaCalc::integraPotencia($pdo, $ctrlId, $iniUtc, $fimUtc, 'potencia_geracao_w');
     
-    $geracaoKwh   = (float)$data['geracao_kwh'];
-    $exportadaKwh = (float)$data['exportada_kwh'];
+    // --- Autoconsumo: energia gerada e usada localmente (não exportada) ---
+    $autoconsumoKwh = max(0.0, $geracaoKwh - $exportadaKwh);
+    $autoconsumoRs  = $autoconsumoKwh * $tarifaKwh;
+
+    // --- Compensado: importada abatida da disponibilidade, valorada ao fator de injeção ---
+    $compensadoKwh = max(0.0, $importadaKwh - $custoDisp);
+    $compensadoRs  = $compensadoKwh * $fatorInjecao;
+
+    // --- Total ---
+    // --- À Compensar ESTIMADO (projeção do crédito gerado pela exportação) ---
+    $aCompensarKwh = $exportadaKwh;
+    $aCompensarRs  = $aCompensarKwh * $fatorInjecao;
+
+    $economiaTotalRs = $autoconsumoRs + $compensadoRs;
+
+    // Headline DIA: economia percebida = realizado + projeção de crédito.
+    // NÃO confundir com economia_total_rs (contábil, só realizado).
+    $estimativaDiaRs = $autoconsumoRs + $aCompensarRs;
+
+    $ret = [
+        'importada_kwh'    => round($importadaKwh, 2),
+        'exportada_kwh'    => round($exportadaKwh, 2),
+        'geracao_kwh'      => round($geracaoKwh, 2),
+        'autoconsumo_kwh'  => round($autoconsumoKwh, 2),
+        'autoconsumo_rs'   => round($autoconsumoRs, 2),
+        'compensado_kwh'   => round($compensadoKwh, 2),
+        'compensado_rs'    => round($compensadoRs, 2),
+        'a_compensar_kwh'  => round($aCompensarKwh, 2),
+        'a_compensar_rs'   => round($aCompensarRs, 2),
+        'estimativa_dia_rs'=> round($estimativaDiaRs, 2),
+        'modo'             => $modo,
+        'economia_total_rs'=> round($economiaTotalRs, 2),
+        'total'            => round($economiaTotalRs, 2),
+        'tarifa_kwh'       => $tarifaKwh,
+        'fator_injecao'    => $fatorInjecao,
+        'sem_dados'        => ($n_registros === 0)
+    ];
     
-    $ret = TarifaService::economia($geracaoKwh, $exportadaKwh, $tarifaKwh, $fatorInjecao);
-    $ret['sem_dados'] = ((int)$data['n_registros'] === 0);
     return $ret;
 }
 
@@ -98,7 +113,7 @@ try {
 try {
     $filtroTenant = Tenant::filtroSQL('c');
     $sqlCtrl = "
-        SELECT c.id, c.timezone, c.tarifa_kwh, c.fator_injecao
+        SELECT c.id, c.timezone, c.tarifa_kwh, c.fator_injecao, c.delta_max_kwh, c.custo_disponibilidade_kwh
           FROM controladores c
          WHERE c.id = :id
            {$filtroTenant}
@@ -128,6 +143,8 @@ try {
     $tzStr = $controlador['timezone'] ?: 'America/Sao_Paulo';
     $tarifaKwh = (float)($controlador['tarifa_kwh'] ?? 0.9482);
     $fatorInjecao = (float)($controlador['fator_injecao'] ?? 0.760);
+    $deltaMax = (float)($controlador['delta_max_kwh'] ?? 2.000);
+    $custoDisp = (float)($controlador['custo_disponibilidade_kwh'] ?? 100);
     try {
         $tz = new DateTimeZone($tzStr);
     } catch (Exception $e) {
@@ -183,7 +200,7 @@ try {
     $iniUtc = $ini->setTimezone($utc)->format('Y-m-d H:i:s');
     $fimUtc = $fim->setTimezone($utc)->format('Y-m-d H:i:s');
     
-    $atual = calcularEconomiaJanela($pdo, (int)$controladorId, $iniUtc, $fimUtc, $tarifaKwh, $fatorInjecao, $tzStr);
+    $atual = calcularEconomiaJanela($pdo, (int)$controladorId, $iniUtc, $fimUtc, $tarifaKwh, $fatorInjecao, $tzStr, $deltaMax, $custoDisp, $periodo);
     
     $resp = $atual;
     $resp['ref'] = $ref !== '' ? $ref : ($periodo === 'mes' ? $ini->format('Y-m') : $ini->format('Y-m-d'));
@@ -192,10 +209,10 @@ try {
     if ($comparar) {
         $iniAntUtc = $iniAnt->setTimezone($utc)->format('Y-m-d H:i:s');
         $fimAntUtc = $fimAnt->setTimezone($utc)->format('Y-m-d H:i:s');
-        $ant = calcularEconomiaJanela($pdo, (int)$controladorId, $iniAntUtc, $fimAntUtc, $tarifaKwh, $fatorInjecao, $tzStr);
+        $ant = calcularEconomiaJanela($pdo, (int)$controladorId, $iniAntUtc, $fimAntUtc, $tarifaKwh, $fatorInjecao, $tzStr, $deltaMax, $custoDisp, $periodo);
 
-        $tAtual = (float)($atual['total'] ?? 0);
-        $tAnt   = (float)($ant['total'] ?? 0);
+        $tAtual = (float)($periodo === 'dia' ? ($atual['estimativa_dia_rs'] ?? $atual['total']) : ($atual['total'] ?? 0));
+        $tAnt   = (float)($periodo === 'dia' ? ($ant['estimativa_dia_rs'] ?? $ant['total']) : ($ant['total'] ?? 0));
         $resp['anterior']     = ['total' => $tAnt];
         $resp['variacao_pct'] = $tAnt > 0 ? round((($tAtual - $tAnt) / $tAnt) * 100, 1) : null;
     }

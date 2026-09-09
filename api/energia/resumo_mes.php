@@ -2,7 +2,7 @@
 // ============================================================
 // Projeto      : CIP - Controlador de Injecao de Potencia Eletrica
 // Arquivo      : api/energia/resumo_mes.php
-// Versao       : v1.0.1
+// Versao       : v1.0.2
 // Data         : 2026-09-08
 // Objetivo     : Retornar agregado do mes corrente com projecao
 // Dependencias : config/app.php, config/database.php, app/auth.php, app/helpers/Tenant.php
@@ -35,6 +35,7 @@ require_once __DIR__ . '/../../config/app.php';
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../app/auth.php';
 require_once __DIR__ . '/../../app/helpers/Tenant.php';
+require_once __DIR__ . '/../../app/helpers/EnergiaCalc.php';
 
 use app\helpers\Tenant;
 
@@ -58,7 +59,7 @@ try {
 try {
     $filtroTenant = Tenant::filtroSQL('c');
     $sqlCtrl = "
-        SELECT c.id, c.codigo, c.apelido, c.timezone, c.modo_controle, 
+        SELECT c.id, c.codigo, c.apelido, c.timezone, c.modo_controle, c.delta_max_kwh, 
                c.controle_exportacao_ativo, c.potencia_nominal_kw, c.potencia_pico_90d_kw
           FROM controladores c
          WHERE c.id = :id
@@ -87,6 +88,7 @@ try {
     }
     
     $tzStr = $controlador['timezone'] ?: 'America/Sao_Paulo';
+      $deltaMax = (float)($controlador['delta_max_kwh'] ?? 2.000);
     try {
         $tz = new DateTimeZone($tzStr);
     } catch (Exception $e) {

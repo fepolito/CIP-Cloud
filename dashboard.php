@@ -1094,7 +1094,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       </div>
       <div class="ce-linha">
         <span class="cb-icone">💡</span>
-        <span class="cb-label">Crédito injeção</span>
+        <span class="cb-label">Compensado</span>
         <span class="cb-valor" id="eco-credito">—</span>
       </div>
     </div>
@@ -1120,7 +1120,7 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
       </div>
       <div class="ce-linha">
         <span class="cb-icone">💡</span>
-        <span class="cb-label">Crédito injeção</span>
+        <span class="cb-label">Compensado</span>
         <span class="cb-valor" id="eco-credito-mes">—</span>
       </div>
     </div>
@@ -1304,7 +1304,7 @@ async function atualizarCardEconomia(controladorId) {
     const j = await r.json();
     if (!j.sucesso) throw new Error(j.erro || 'falha');
 
-    const d = j.data;
+    const d = j.data ?? j;
     const brl = (v) => Number(v || 0)
       .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -1314,20 +1314,47 @@ async function atualizarCardEconomia(controladorId) {
       document.getElementById('eco-autoconsumo').textContent = '—';
       document.getElementById('eco-autoconsumo').previousElementSibling.innerHTML = 'Autoconsumo';
       document.getElementById('eco-credito').textContent = '—';
-      document.getElementById('eco-credito').previousElementSibling.innerHTML = 'Crédito injeção';
+      document.getElementById('eco-credito').previousElementSibling.innerHTML = 'Compensado';
+      document.getElementById('eco-credito').classList.remove('valor-estimado');
       pintarVariacao('eco-variacao', null);
     } else {
       const fmtKwh = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' kWh';
       const kwhTotal = (d.autoconsumo_kwh || 0) + (d.exportada_kwh || 0);
 
-      document.getElementById('eco-total').textContent       = brl(d.total);
+      // normaliza modo (aceita 'dia', 'Dia', ' diario ', etc.)
+      const modo = String(d.modo ?? '').trim().toLowerCase();
+      const ehDia = modo.startsWith('dia');
+
+      // Dia: soma realizado + projeção. Mês: mantém total contábil.
+      const valorHeadline = ehDia
+          ? (d.estimativa_dia_rs ?? ((d.autoconsumo_rs ?? 0) + (d.a_compensar_rs ?? 0)))
+          : (d.economia_total_rs ?? d.total ?? 0);
+
+      document.getElementById('eco-total').textContent       = brl(valorHeadline);
       document.getElementById('eco-total-sub').innerHTML     = `estimativa hoje <span style="opacity:0.8; font-weight:normal">(${fmtKwh(kwhTotal)})</span>`;
       
-      document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_reais);
+      document.getElementById('eco-autoconsumo').textContent = brl(d.autoconsumo_rs);
       document.getElementById('eco-autoconsumo').previousElementSibling.innerHTML = `Autoconsumo <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.autoconsumo_kwh)})</span>`;
       
-      document.getElementById('eco-credito').textContent     = brl(d.credito_reais);
-      document.getElementById('eco-credito').previousElementSibling.innerHTML = `Crédito injeção <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.exportada_kwh)})</span>`;
+      const compensadoLabel = document.getElementById('eco-credito').previousElementSibling;
+      const compensadoValor = document.getElementById('eco-credito');
+
+      // mostra "À Compensar" quando: é dia OU compensado realizado é 0 mas há exportação estimada
+      const usarEstimado = (ehDia || (d.compensado_rs ?? 0) === 0)
+                           && (d.a_compensar_rs ?? 0) > 0;
+
+      if (usarEstimado) {
+        compensadoLabel.innerHTML =
+          `À Compensar <span class="badge-estimado">(estimado)</span> ` +
+          `<span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.a_compensar_kwh)})</span>`;
+        compensadoValor.textContent = brl(d.a_compensar_rs);
+        compensadoValor.classList.add('valor-estimado');
+      } else {
+        compensadoLabel.innerHTML =
+          `Compensado <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.compensado_kwh)})</span>`;
+        compensadoValor.textContent = brl(d.compensado_rs);
+        compensadoValor.classList.remove('valor-estimado');
+      }
 
       const refLabel = d.periodo_atual === false ? 'que no dia anterior' : 'que ontem';
       pintarVariacao('eco-variacao', d.variacao_pct, refLabel);
@@ -1352,7 +1379,7 @@ async function atualizarCardEconomiaMes(controladorId) {
     const refQ = navEconomia.mes ? `&ref=${navEconomia.mes}` : '';
     const r = await fetch(`/api/energia/economia.php?controlador_id=${controladorId}&periodo=mes&comparar=1${refQ}`);
     const j = await r.json();
-    const d = j.data;
+    const d = j.data ?? j;
     if (!d) return;
 
     const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1363,7 +1390,7 @@ async function atualizarCardEconomiaMes(controladorId) {
       document.getElementById('eco-autoconsumo-mes').textContent = '—';
       document.getElementById('eco-autoconsumo-mes').previousElementSibling.innerHTML = 'Autoconsumo';
       document.getElementById('eco-credito-mes').textContent = '—';
-      document.getElementById('eco-credito-mes').previousElementSibling.innerHTML = 'Crédito injeção';
+      document.getElementById('eco-credito-mes').previousElementSibling.innerHTML = 'Compensado';
       pintarVariacao('eco-variacao-mes', null);
     } else {
       const fmtKwh = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' kWh';
@@ -1372,11 +1399,11 @@ async function atualizarCardEconomiaMes(controladorId) {
       document.getElementById('eco-total-mes').textContent       = brl(d.total);
       document.getElementById('eco-total-sub-mes').innerHTML     = `acumulado no mês <span style="opacity:0.8; font-weight:normal">(${fmtKwh(kwhTotal)})</span>`;
 
-      document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_reais);
+      document.getElementById('eco-autoconsumo-mes').textContent = brl(d.autoconsumo_rs);
       document.getElementById('eco-autoconsumo-mes').previousElementSibling.innerHTML = `Autoconsumo <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.autoconsumo_kwh)})</span>`;
       
-      document.getElementById('eco-credito-mes').textContent     = brl(d.credito_reais);
-      document.getElementById('eco-credito-mes').previousElementSibling.innerHTML = `Crédito injeção <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.exportada_kwh)})</span>`;
+      document.getElementById('eco-credito-mes').textContent     = brl(d.compensado_rs);
+      document.getElementById('eco-credito-mes').previousElementSibling.innerHTML = `Compensado <span style="opacity:0.7; font-weight:normal">(${fmtKwh(d.compensado_kwh)})</span>`;
 
       const refLabel = d.periodo_atual === false ? 'que no mês anterior' : 'que no mesmo período do mês anterior';
       pintarVariacao('eco-variacao-mes', d.variacao_pct, refLabel);

@@ -482,3 +482,5 @@
         text-align: center;
     }
 }
+.valor-estimado { font-style: italic; color: #6b7280; }
+.badge-estimado { font-size: .75em; color: #6b7280; }
