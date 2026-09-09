@@ -50,14 +50,14 @@ if ($controladorId === false || $controladorId === null || $controladorId <= 0) 
 function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $fimUtc, float $tarifaKwh, float $fatorInjecao, string $tzStr): array {
     $sqlData = "
         SELECT 
-          (SELECT COUNT(*) FROM telemetria_5min WHERE controlador_id = :ctrl_id AND timestamp_utc >= :ini AND timestamp_utc < :fim) AS n_registros,
+          (SELECT COUNT(*) FROM telemetria_5min WHERE controlador_id = :ctrl_id_1 AND timestamp_utc >= :ini_1 AND timestamp_utc < :fim_1) AS n_registros,
           COALESCE((
             SELECT SUM(geracao_dia) FROM (
               SELECT MAX(energia_geracao_kwh) AS geracao_dia
               FROM telemetria_5min
-              WHERE controlador_id = :ctrl_id 
-                AND timestamp_utc >= :ini 
-                AND timestamp_utc < :fim
+              WHERE controlador_id = :ctrl_id_2 
+                AND timestamp_utc >= :ini_2 
+                AND timestamp_utc < :fim_2
                 AND energia_geracao_kwh IS NOT NULL
               GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz))
             ) AS t_dias
@@ -65,13 +65,18 @@ function calcularEconomiaJanela(PDO $pdo, int $ctrlId, string $iniUtc, string $f
           COALESCE((
             SELECT MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)
             FROM telemetria_5min
-            WHERE controlador_id = :ctrl_id 
-              AND timestamp_utc >= :ini 
-              AND timestamp_utc < :fim
+            WHERE controlador_id = :ctrl_id_3 
+              AND timestamp_utc >= :ini_3 
+              AND timestamp_utc < :fim_3
           ), 0) AS exportada_kwh
     ";
     $st = $pdo->prepare($sqlData);
-    $st->execute([':ctrl_id' => $ctrlId, ':ini' => $iniUtc, ':fim' => $fimUtc, ':tz' => $tzStr]);
+    $st->execute([
+        ':ctrl_id_1' => $ctrlId, ':ini_1' => $iniUtc, ':fim_1' => $fimUtc,
+        ':ctrl_id_2' => $ctrlId, ':ini_2' => $iniUtc, ':fim_2' => $fimUtc,
+        ':ctrl_id_3' => $ctrlId, ':ini_3' => $iniUtc, ':fim_3' => $fimUtc,
+        ':tz' => $tzStr
+    ]);
     $data = $st->fetch(PDO::FETCH_ASSOC) ?: ['n_registros' => 0, 'geracao_kwh' => 0, 'exportada_kwh' => 0];
     
     $geracaoKwh   = (float)$data['geracao_kwh'];
