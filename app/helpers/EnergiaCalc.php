@@ -40,19 +40,17 @@ final class EnergiaCalc
             throw new InvalidArgumentException("Coluna não permitida: {$coluna}");
         }
 
+        // Compatibilidade total com MySQL 5.7 (HostGator) e MySQL 8.0+:
+        // Busca os pontos cronológicos e processa os deltas com guarda física em PHP.
+        // Evita erro de sintaxe 1064 no MySQL 5.7 (onde WITH e LAG() não existem).
         $sql = "
-            WITH deltas AS (
-                SELECT
-                    {$coluna} - LAG({$coluna}) OVER (ORDER BY timestamp_utc) AS delta
-                FROM telemetria_5min
-                WHERE controlador_id = :cid
-                  AND timestamp_utc >= :ini
-                  AND timestamp_utc <  :fim
-            )
-            SELECT COALESCE(SUM(
-                CASE WHEN delta BETWEEN 0 AND :dmax THEN delta ELSE 0 END
-            ), 0) AS total
-            FROM deltas
+            SELECT {$coluna}
+            FROM telemetria_5min
+            WHERE controlador_id = :cid
+              AND timestamp_utc >= :ini
+              AND timestamp_utc <  :fim
+              AND {$coluna} IS NOT NULL
+            ORDER BY timestamp_utc ASC
         ";
 
         $stmt = $pdo->prepare($sql);
@@ -60,10 +58,23 @@ final class EnergiaCalc
             ':cid' => $controladorId,
             ':ini' => $iniUtc,
             ':fim' => $fimUtc,
-            ':dmax' => $deltaMax,
         ]);
+        $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        return (float) $stmt->fetchColumn();
+        $total = 0.0;
+        $prev = null;
+        foreach ($rows as $val) {
+            $val = (float) $val;
+            if ($prev !== null) {
+                $delta = $val - $prev;
+                if ($delta >= 0.0 && $delta <= $deltaMax) {
+                    $total += $delta;
+                }
+            }
+            $prev = $val;
+        }
+
+        return (float) $total;
     }
 
     /**
