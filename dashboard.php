@@ -1,8 +1,8 @@
 <?php
 /**
  * @arquivo       dashboard.php
- * @versao        1.19.1
- * @modificado_em 2026-07-19
+ * @versao        1.19.2
+ * @modificado_em 2026-09-10
  * @objetivo      Interface principal de visualização de telemetria e fluxos
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  *
@@ -102,6 +102,8 @@
  *   2026-07-19  v1.18.13 [FIX] Ajuste UX do badge (Fase 1).
  *   2026-07-19  v1.19.0  [ADD] Navegação temporal nos cards de economia (Fase 2).
  *   2026-07-19  v1.19.1  [FIX] Datepickers iniciam preenchidos com dia/mês atuais (Fase 2.1).
+ *   2026-09-10  v1.19.2  [FIX] Mobile: label "À Compensar" com quebra controlada
+ *                        e badge (estimado) em <=480px.
  * ============================================================
  */
 
@@ -527,6 +529,32 @@ $appIsAdmin      = in_array($_SESSION['usuario_perfil'] ?? '', [
     .eco-nav-hoje  { font-size: .72rem; margin-left: .4rem; cursor: pointer;
                      background: none; border: none; color: var(--txt-dim, #6b7280);
                      text-decoration: underline; }
+
+    /* ===== Fix mobile: label "À Compensar" com quebra controlada ===== */
+    .card-economia .cb-label {
+      white-space: normal;        /* libera quebra (era nowrap herdado) */
+      flex-wrap: wrap;            /* permite os spans descerem */
+      align-items: baseline;
+      line-height: 1.25;
+    }
+
+    /* Badge (estimado): sem regra própria hoje — definindo aparência */
+    .card-economia .badge-estimado {
+      font-size: 11px;
+      font-weight: 400;
+      opacity: .7;
+    }
+
+    @media (max-width: 480px) {
+      /* alinha valor ao topo quando o label vira 2 linhas */
+      .card-economia .ce-linha { align-items: start; }
+
+      /* (estimado) desce para baixo de "À Compensar" */
+      .card-economia .badge-estimado {
+        flex-basis: 100%;         /* quebra de linha dentro do flex do label */
+        margin-top: 1px;
+      }
+    }
 
     .cb-titulo { margin: 0 0 16px; font-size: 15px; font-weight: 700; color: var(--txt); }
     .cb-titulo small { font-weight: 400; opacity: .6; }
