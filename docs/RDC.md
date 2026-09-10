@@ -3,7 +3,7 @@
 
 **@arquivo:** docs/RDC.md
 **@versao:** 1.0.0
-**@modificado_em:** 2026-06-08
+**@modificado_em:** 2026-09-10
 **@objetivo:** Registro vivo de decisoes tecnicas do projeto CIP Cloud,
               com rastreabilidade (PQRS), status e referencia.
 **@autor:** Fernando / CIP Cloud Copilot
@@ -331,3 +331,13 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
 ## CIP-DEC-20260608-005
 - **Contexto/Decisão:** normalizarPotencias deixa de usar number_format(...,2) e passa a usar (int) round($v). Canônico = inteiros nus no JSON. Requer espelhamento no firmware (hash sobre int, não string).
 - **Status:** 🟢 Confirmada
+
+## CIP-DEC-20260910-001 — Fix mobile label "À Compensar" (badge estimado quebra p/ baixo)
+- **Título:** Fix mobile label "À Compensar" (badge estimado quebra p/ baixo)
+- **Contexto:** white-space:nowrap herdado em .cb-label estourava a coluna 1fr do grid .ce-linha em viewport ≤480px, comprometendo alinhamento.
+- **Decisão:** Override escopado .card-economia .cb-label (white-space:normal + flex-wrap) e .badge-estimado com flex-basis:100% em ≤480px.
+- **Impacto:** dashboard.php v1.13.0 → v1.13.1 (somente CSS, escopado).
+- **Riscos:** Nenhum — .cb-linha (infográfico) preservado.
+- **Owner:** Fernando
+- **Status:** ✅ Confirmada + em PROD (2026-09-10)
+
