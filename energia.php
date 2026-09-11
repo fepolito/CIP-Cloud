@@ -41,6 +41,13 @@
  *                          local. Tema agora e GLOBAL via includes/app_header.php
  *                          + assets/js/tema.js. Chart registrado em window.CipTema
  *                          para sincronia automatica de modo dark/light.
+ *   - 2026-09-11 | v2.5 | [UI] Graficos Mes/Ano/Total com curva straight,
+ *                          linhas 100% opacas (fix fill.opacity), bullets
+ *                          visiveis (size 5), Geracao continua e Consumo
+ *                          tracejado (CIP-DEC-20260911-002).
+ *   - 2026-09-11 | v2.6 | [FEAT] Modo Mes com intervalo dinamico de faturas
+ *                          (faturas_distribuidora) ou fallback, mapeamento
+ *                          por dia ISO sem colisoes e badge de ciclo (CIP-DEC-20260911-001).
  * =============================================================================
  */
 require_once __DIR__ . '/config/app.php';
@@ -826,6 +833,7 @@ let modoAtual = 'dia';
 let resumoDia = {};
 let dataAtual = dataHoje();
 let mesAtual  = dataHoje().substring(0, 7);
+let intervaloMesAtual = null; // { inicio, fim, origem }
 let anoAtual  = new Date().getFullYear();
 let anosDisp  = [];
 
@@ -915,7 +923,16 @@ function nomeMes(num) { return NOMES_MESES[(num - 1)] ?? ''; }
 function labelPeriodo() {
   switch (modoAtual) {
     case 'dia' : return formatarDataBR(dataAtual);
-    case 'mes' : { const [y,m] = mesAtual.split('-'); return `${nomeMes(+m)}/${y}`; }
+    case 'mes' : {
+      if (intervaloMesAtual?.inicio && intervaloMesAtual?.fim) {
+        const iBr = formatarDataBR(intervaloMesAtual.inicio);
+        const fBr = formatarDataBR(intervaloMesAtual.fim);
+        const tag = intervaloMesAtual.origem === 'fatura' ? ' (Fatura)' : '';
+        return `${iBr} a ${fBr}${tag}`;
+      }
+      const [y,m] = mesAtual.split('-');
+      return `${nomeMes(+m)}/${y}`;
+    }
     case 'ano' : return `${anoAtual}`;
     case 'anos': return 'Histórico Total';
   }
@@ -1108,12 +1125,16 @@ function buildChartOptions(modo, cats, vImp, vExp, vGer, vCons) {
   } else if (modo === 'mes') {
     xaxis = {
       categories: cats,
-      tickAmount: 30,
+      tickAmount: cats.length > 20 ? 15 : cats.length,
       labels: {
-        style    : { colors: '#7a9cc4', fontSize: '11px' },
-        formatter: v => v,
+        rotate               : -45,
+        rotateAlways         : false,
+        hideOverlappingLabels: true,
+        showDuplicates       : false,
+        style                : { colors: '#7a9cc4', fontSize: '11px' },
+        formatter            : v => v,
       },
-      title     : { text: 'Dia do mês', style: { color: '#7a9cc4', fontSize: '11px' } },
+      title     : { text: 'Dia', style: { color: '#7a9cc4', fontSize: '11px' } },
       axisBorder: { color: '#1a2d4a' },
       axisTicks : { color: '#1a2d4a' },
     };
@@ -1162,40 +1183,32 @@ function buildChartOptions(modo, cats, vImp, vExp, vGer, vCons) {
       }
     : {
         show     : true,
-        width    : [0, 0, 2.5, 2.5],
-        curve    : 'smooth',
-        dashArray: [0, 0, 0, 5],
+        width    : [0, 0, 3, 3],                                  // linhas encorpadas
+        curve    : ['straight', 'straight', 'straight', 'straight'],
+        dashArray: [0, 0, 0, 6],                                  // Geração contínua; Consumo tracejado
       };
 
   /* ── markers ─────────────────────────────────────────────── */
   const markersCfg = isDia
     ? { size: 0 }
     : {
-        size        : [0, 0, 4, 4],
-        strokeColors: '#0d1526',
+        size        : [0, 0, 5, 5],   // Bullets bem visíveis em Geração e Consumo
+        strokeColors: '#070b14',
         strokeWidth : 2,
-        hover       : { size: 6 },
+        hover       : { size: 7 },
       };
 
   /* ── fill ────────────────────────────────────────────────── */
-  // ✅ FIX v2.2.0: modo DIA usa type='solid' + opacity=1
-  // opacity=0 afetava a linha inteira, tornando-a invisível.
-  // A área sob a linha já é controlada pelo stroke (sem area chart).
+  // ✅ FIX: no modo Mês/Ano/Total, linhas precisam de opacity=1
+  // [0.85, 0.85, 0.2, 0] tornava Consumo 100% invisível e Geração quase transparente.
   const fillCfg = isDia
     ? {
         type   : 'solid',
         opacity: 1,
       }
     : {
-        opacity : [0.85, 0.85, 0.2, 0],
-        type    : ['solid', 'solid', 'gradient', 'solid'],
-        gradient: {
-          shade         : 'dark',
-          type          : 'vertical',
-          shadeIntensity: 0.3,
-          opacityFrom   : 0.5,
-          opacityTo     : 0.05,
-        },
+        opacity : [0.85, 0.85, 1, 1],
+        type    : ['solid', 'solid', 'solid', 'solid'],
       };
 
   return {
@@ -1635,7 +1648,7 @@ async function carregarDia() {
 
 
 /* ════════════════════════════════════════
-   MODO MÊS — intacto v2.2
+   MODO MÊS — ciclo dinâmico (faturas_distribuidora / fallback)
 ════════════════════════════════════════ */
 async function carregarMes() {
   const mes = document.getElementById('inp-mes').value;
@@ -1646,39 +1659,71 @@ async function carregarMes() {
   const json = await res.json();
   if (!json.sucesso) { mostrarToastErro('API mês: ' + (json.erro ?? 'Erro')); return; }
 
-  const sRaw = extrairSeries(json);
-  const vImp  = new Array(30).fill(0);
-  const vExp  = new Array(30).fill(0);
-  const vGer  = new Array(30).fill(0);
-  const vCons = new Array(30).fill(0);
-  const hoje  = dataHoje();
+  intervaloMesAtual = json.intervalo || null;
 
-  const preencherVetor = (serie, vetor) => {
-    serie.forEach(([ts, val]) => {
-      const d   = new Date(ts);
-      const dia = d.getDate();
-      const iso = d.toISOString().split('T')[0];
-      if (dia >= 1 && dia <= 30 && iso <= hoje) {
-        vetor[dia - 1] = parseFloat((val ?? 0).toFixed(3));
-      }
+  // 1. Determina as datas de início e fim do ciclo retornado pela API
+  let inicioIso = intervaloMesAtual?.inicio;
+  let fimIso    = intervaloMesAtual?.fim;
+
+  if (!inicioIso || !fimIso) {
+    const [ano, m] = mes.split('-').map(Number);
+    const ultimoDia = new Date(ano, m, 0).getDate();
+    inicioIso = `${mes}-01`;
+    fimIso    = `${mes}-${String(ultimoDia).padStart(2, '0')}`;
+  }
+
+  // 2. Gera a sequência contínua de dias do intervalo
+  const diasRange = [];
+  let cur = new Date(inicioIso + 'T12:00:00');
+  const fimObj = new Date(fimIso + 'T12:00:00');
+  while (cur <= fimObj) {
+    const y = cur.getFullYear();
+    const m = String(cur.getMonth() + 1).padStart(2, '0');
+    const d = String(cur.getDate()).padStart(2, '0');
+    diasRange.push(`${y}-${m}-${d}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  // 3. Mapeia dados da API por chave ISO (YYYY-MM-DD) para evitar colisões entre meses
+  const sRaw = extrairSeries(json);
+  const mapaPorDia = (serie) => {
+    const mapa = {};
+    (serie || []).forEach(([ts, val]) => {
+      const d = new Date(ts);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dia = String(d.getDate()).padStart(2, '0');
+      mapa[`${y}-${m}-${dia}`] = parseFloat((val ?? 0).toFixed(3));
     });
+    return mapa;
   };
 
-  preencherVetor(sRaw.imp,  vImp);
-  preencherVetor(sRaw.exp,  vExp);
-  preencherVetor(sRaw.ger,  vGer);
-  preencherVetor(sRaw.cons, vCons);
+  const mImp  = mapaPorDia(sRaw.imp);
+  const mExp  = mapaPorDia(sRaw.exp);
+  const mGer  = mapaPorDia(sRaw.ger);
+  const mCons = mapaPorDia(sRaw.cons);
 
-  const cats = Array.from({ length: 30 }, (_, i) => i + 1);
+  const hoje = dataHoje();
+
+  // Dias futuros em relação a hoje recebem null (gap visual, não zero falso)
+  const vImp  = diasRange.map(d => (d <= hoje ? (mImp[d]  ?? 0) : null));
+  const vExp  = diasRange.map(d => (d <= hoje ? (mExp[d]  ?? 0) : null));
+  const vGer  = diasRange.map(d => (d <= hoje ? (mGer[d]  ?? 0) : null));
+  const vCons = diasRange.map(d => (d <= hoje ? (mCons[d] ?? 0) : null));
+
+  // 4. Categorias para o eixo X: exibe "DD/MM" se cruzar meses, ou "DD" se for no mesmo mês
+  const cruzaMeses = inicioIso.substring(0, 7) !== fimIso.substring(0, 7);
+  const cats = diasRange.map(d => {
+    const [, m, dia] = d.split('-');
+    return cruzaMeses ? `${dia}/${m}` : dia;
+  });
 
   await chart.updateOptions(
     buildChartOptions('mes', cats, vImp, vExp, vGer, vCons),
     true, true, true
   );
 
-  json._raw = sRaw.imp.map(([ts]) => ({
-    dia: new Date(ts).toISOString().split('T')[0]
-  }));
+  json._raw = diasRange.map(d => ({ dia: d }));
   atualizarUI(json, 'mes');
 }
 

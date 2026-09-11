@@ -3,7 +3,7 @@
 
 **@arquivo:** docs/RDC.md
 **@versao:** 1.0.0
-**@modificado_em:** 2026-09-10
+**@modificado_em:** 2026-09-11
 **@objetivo:** Registro vivo de decisoes tecnicas do projeto CIP Cloud,
               com rastreabilidade (PQRS), status e referencia.
 **@autor:** Fernando / CIP Cloud Copilot
@@ -288,10 +288,10 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
                       diretamente). resumo_dia/mes destinados a energia.php.
                       Status: 🟡 Proposta (confirmar consumidor real)
 
-## D�vida T�cnica: TEMP-COBERTURA-SOLIS
+## Dvida Tcnica: TEMP-COBERTURA-SOLIS
 - **Data**: 2026-07-15
-- **Descri��o**: O c�lculo de cobertura de gera��o (porcentagem de dados presentes no dia) est� sendo injetado temporariamente na API de resumo di�rio usando a tag TEMP-COBERTURA-SOLIS. Essa l�gica dever� ser removida e substitu�da assim que a integra��o direta com a API da SolisCloud for ativada.
-- **Status**: Pendente de integra��o futura.
+- **Descrio**: O clculo de cobertura de gerao (porcentagem de dados presentes no dia) est sendo injetado temporariamente na API de resumo dirio usando a tag TEMP-COBERTURA-SOLIS. Essa lgica dever ser removida e substituda assim que a integrao direta com a API da SolisCloud for ativada.
+- **Status**: Pendente de integrao futura.
 
 
 ## CIP-DEC-20260725-001 — Modelo de curva de limites: histórico versionado
@@ -340,4 +340,14 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
 - **Riscos:** Nenhum — .cb-linha (infográfico) preservado.
 - **Owner:** Fernando
 - **Status:** ✅ Confirmada + em PROD (2026-09-10)
+## CIP-DEC-20260911-001 — Intervalo do modo MÊS por faturas_distribuidora + fallback dia 1 -> LAST_DAY
+- **Contexto:** Alinhamento contábil e de faturamento: o modo Mês deve respeitar as datas de leitura da concessionária quando houver fatura cadastrada.
+- **Decisão:** `api/energia/mes.php` busca `data_leitura_ant` e `data_leitura_atual` em `faturas_distribuidora` via Tenant::filtroSQL() (com fallback dinâmico dia 1 -> LAST_DAY e suporte a início/fim explícitos). `energia.php` consome `json.intervalo`, gera o range sequencial completo (evitando colisão de dias quando cruza meses), adapta o eixo X e exibe o intervalo real no `#badge-periodo`.
+- **Impacto:** `api/energia/mes.php` v1.2/v1.3 e `energia.php` v2.6.
+- **Status:** ✅ Confirmada
 
+## CIP-DEC-20260911-002 — Gráficos Mês/Ano/Total: curva straight, linhas 100% opacas, bullets visíveis, Consumo tracejado
+- **Contexto:** Identificado que `fill.opacity = [0.85, 0.85, 0.2, 0]` no ApexCharts zerava a opacidade da linha de Consumo e deixava a Geração tênue (20%). A ausência de marcadores também reduzia a legibilidade.
+- **Decisão:** Corrigir `fill.opacity` para `[0.85, 0.85, 1, 1]` e `type: 'solid'` (linhas 100% nítidas e visíveis). Reativar marcadores com `size: [0, 0, 5, 5]` e borda `#070b14`. Traçado em reta `curve: 'straight'`, `width: [0, 0, 3, 3]`, Geração sólida e Consumo tracejado (`dashArray: [0, 0, 0, 6]`).
+- **Impacto:** energia.php v2.5 (função `buildChartOptions`).
+- **Status:** 🟢 Confirmada

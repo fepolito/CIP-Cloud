@@ -18,6 +18,10 @@
  *   - 2026-04-12 | v1.0 | Criacao inicial
  *   - 2026-04-12 | v1.1 | Fix critico: config/db.php -> config/database.php
  *                          + getDbConnection() no lugar de $pdo direto
+ *   - 2026-09-11 | v1.2 | Intervalo por faturas_distribuidora (ciclo de leitura)
+ *                          + fallback dinamico dia 1 -> LAST_DAY(mes).
+ *                          Tabela adicionada: faturas_distribuidora.
+ *   - 2026-09-11 | v1.3 | Suporte a inicio/fim parametrizados + robustez $_GET
  * =============================================================================
  */
 
@@ -41,8 +45,13 @@ requireAuthApi();                                // 👈 ADICIONA ISTO
 // ─── Entrada ──────────────────────────────────────────────────
 
 
-$controlador_id = filter_input(INPUT_GET, 'controlador_id', FILTER_VALIDATE_INT);
-$mes            = filter_input(INPUT_GET, 'mes', FILTER_SANITIZE_SPECIAL_CHARS) ?? date('Y-m');
+$controlador_id = filter_input(INPUT_GET, 'controlador_id', FILTER_VALIDATE_INT)
+    ?: (isset($_GET['controlador_id']) ? filter_var($_GET['controlador_id'], FILTER_VALIDATE_INT) : null);
+$mes            = filter_input(INPUT_GET, 'mes', FILTER_SANITIZE_SPECIAL_CHARS)
+    ?: (isset($_GET['mes']) ? htmlspecialchars(trim((string)$_GET['mes']), ENT_QUOTES, 'UTF-8') : date('Y-m'));
+
+$inicioParam    = filter_input(INPUT_GET, 'inicio', FILTER_DEFAULT) ?: ($_GET['inicio'] ?? null);
+$fimParam       = filter_input(INPUT_GET, 'fim',    FILTER_DEFAULT) ?: ($_GET['fim']    ?? null);
 
 if (!$controlador_id || $controlador_id <= 0) {
     http_response_code(400);
@@ -85,6 +94,38 @@ try {
 
     $tz = $controlador['timezone'] ?: 'America/Sao_Paulo';
 
+    // ─── Intervalo do ciclo (explícito via GET ou faturas_distribuidora ou fallback dia 1 -> LAST_DAY) ─
+    if ($inicioParam && $fimParam && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$inicioParam) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$fimParam)) {
+        $inicio       = (string)$inicioParam;
+        $fim          = (string)$fimParam;
+        $origem_datas = 'parametro';
+    } else {
+        $sqlFatura = "
+            SELECT data_leitura_ant, data_leitura_atual
+              FROM faturas_distribuidora
+             WHERE controlador_id = :cid
+               AND mes_referencia = :ref
+               " . Tenant::filtroSQL() . "
+             LIMIT 1
+        ";
+        $paramsFat = [':cid' => $controlador_id, ':ref' => $mes];
+        Tenant::aplicarParam($paramsFat);
+
+        $stmtFat = $pdo->prepare($sqlFatura);
+        $stmtFat->execute($paramsFat);
+        $fatura = $stmtFat->fetch(PDO::FETCH_ASSOC);
+
+        if ($fatura) {
+            $inicio       = $fatura['data_leitura_ant'];
+            $fim          = $fatura['data_leitura_atual'];
+            $origem_datas = 'fatura';
+        } else {
+            $inicio       = date('Y-m-01', strtotime($mes . '-01'));
+            $fim          = date('Y-m-t',  strtotime($mes . '-01'));
+            $origem_datas = 'fallback';
+        }
+    }
+
     // 🔧 Aliases CORRIGIDOS
     $sql = "
         SELECT
@@ -96,7 +137,7 @@ try {
         FROM telemetria_5min
         WHERE
             controlador_id = :controlador_id
-            AND DATE_FORMAT(CONVERT_TZ(timestamp_utc, 'UTC', :tz2), '%Y-%m') = :mes
+            AND DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz2)) BETWEEN :inicio AND :fim
         GROUP BY dia
         ORDER BY dia ASC
     ";
@@ -106,7 +147,8 @@ try {
         ':tz'             => $tz,
         ':tz2'            => $tz,
         ':controlador_id' => $controlador_id,
-        ':mes'            => $mes,
+        ':inicio'         => $inicio,
+        ':fim'            => $fim,
     ]);
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -134,6 +176,11 @@ try {
     echo json_encode([
         'sucesso'              => true,
         'mes'                  => $mes,
+        'intervalo' => [
+            'inicio' => $inicio,
+            'fim'    => $fim,
+            'origem' => $origem_datas,
+        ],
         'controlador_id'       => $controlador_id,
         'controlador_codigo'   => $controlador['codigo'],
         'controlador_apelido'  => $controlador['apelido'],
