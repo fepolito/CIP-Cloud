@@ -1183,20 +1183,13 @@ function buildChartOptions(modo, cats, vImp, vExp, vGer, vCons) {
       }
     : {
         show     : true,
-        width    : [0, 0, 3, 3],                                  // linhas encorpadas
-        curve    : ['straight', 'straight', 'straight', 'straight'],
+        width    : [0, 0],
+        curve    : 'smooth',
         dashArray: [0, 0, 0, 6],                                  // Geração contínua; Consumo tracejado
       };
 
   /* ── markers ─────────────────────────────────────────────── */
-  const markersCfg = isDia
-    ? { size: 0 }
-    : {
-        size        : [0, 0, 5, 5],   // Bullets bem visíveis em Geração e Consumo
-        strokeColors: '#070b14',
-        strokeWidth : 2,
-        hover       : { size: 7 },
-      };
+  const markersCfg = { size: 0 };
 
   /* ── fill ────────────────────────────────────────────────── */
   // ✅ FIX: no modo Mês/Ano/Total, linhas precisam de opacity=1
