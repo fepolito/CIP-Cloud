@@ -1176,7 +1176,7 @@ function buildChartOptions(modo, cats, vImp, vExp, vGer, vCons) {
   const strokeCfg = isDia
     ? {
         show     : true,
-        width    : [2.5, 2.5, 2.5, 2.0],
+        width    : [1, 1, 1, 1],
         curve    : 'smooth',
         dashArray: [0, 6, 0, 4],
         lineCap  : 'round',
