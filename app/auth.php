@@ -163,6 +163,19 @@ function loginUser(array $usuario): void
         ? (int) $usuario['empresa_id']
         : null;
 
+    $_SESSION['forcar_troca_senha'] = (int) ($usuario['forcar_troca_senha'] ?? 0);
+
+    // 🆕 Objeto consolidado para compatibilidade com novos controllers
+    $_SESSION['usuario'] = [
+        'id'                 => $_SESSION['usuario_id'],
+        'nome'               => $_SESSION['usuario_nome'],
+        'email'              => $_SESSION['usuario_email'],
+        'perfil'             => $_SESSION['usuario_perfil'],
+        'papel_global'       => $_SESSION['papel_global'],
+        'empresa_id'         => $_SESSION['empresa_id'],
+        'forcar_troca_senha' => $_SESSION['forcar_troca_senha'],
+    ];
+
     $_SESSION['user_agent']         = $_SERVER['HTTP_USER_AGENT'] ?? '';
     $_SESSION['session_started_at'] = time();
     $_SESSION['last_regeneration']  = time();

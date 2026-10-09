@@ -92,14 +92,15 @@ $_menuItems = [
 // ── Itens do menu engrenagem ─────────────────────────────────
 $_ehMasterHeader = in_array($_SESSION['usuario_perfil'] ?? '', ['master', 'master_operador'], true);
 $_ehAdminHeader  = in_array($_SESSION['usuario_perfil'] ?? '', ['master', 'master_operador', 'administrador'], true);
+$_ehGestorHeader = in_array($_SESSION['usuario_perfil'] ?? '', ['master', 'master_operador', 'administrador', 'operador'], true);
 
 $_configItems = [];
 if ($_ehAdminHeader) {
     $_configItems[] = ['href' => 'usuarios.php',       'icon' => '👥', 'label' => 'Usuários',       'id' => 'usuarios'];
     $_configItems[] = ['href' => 'controladores.php',  'icon' => '📡', 'label' => 'Controladores',  'id' => 'controladores'];
 }
-if ($_ehMasterHeader) {
-    $_configItems[] = ['href' => 'empresas.php',       'icon' => '🏢', 'label' => 'Empresas',       'id' => 'empresas'];
+if ($_ehGestorHeader) {
+    $_configItems[] = ['href' => 'empresas_lista.php', 'icon' => '🏢', 'label' => 'Empresas',       'id' => 'empresas_lista'];
 }
 $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 'id' => ''];
 ?>
@@ -126,6 +127,54 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
 <div class="header-right">
     <!-- Seletor Pill de Controlador -->
     <?php
+    require_once __DIR__ . '/../app/helpers/Tenant.php';
+    require_once __DIR__ . '/../app/services/EmpresaService.php';
+
+    // Fallback: se a página pai não definiu controladoresAcessíveis mas tem PDO
+    if ((!isset($controladoresAcessiveis) || empty($controladoresAcessiveis)) && isset($pdo)) {
+        $filtroSql = \App\Helpers\Tenant::filtroSQL('c');
+        $sqlCtrls = "
+            SELECT c.id, c.codigo, c.apelido, c.empresa_id, c.online
+              FROM controladores c
+             WHERE c.status = 'ativo'
+               {$filtroSql}
+             ORDER BY c.codigo
+        ";
+        $params = [];
+        \App\Helpers\Tenant::aplicarParam($params);
+        $stmt = $pdo->prepare($sqlCtrls);
+        $stmt->execute();
+        $controladoresAcessiveis = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Busca todas as integradoras ativas (hoje só a Aeonium; preparado para múltiplas no futuro)
+    $gruposPorEmpresa = [];
+    if (isset($pdo) && !empty($controladoresAcessiveis)) {
+        $stmtInteg = $pdo->prepare(
+            "SELECT id, nome_fantasia FROM empresa WHERE is_integradora = 1 AND ativo = 1 ORDER BY id ASC"
+        );
+        $stmtInteg->execute();
+        $integradoras = $stmtInteg->fetchAll(PDO::FETCH_ASSOC);
+
+        // Monta mapa empresa_id -> nome da integradora raiz, usando a subárvore de cada integradora
+        $empresaIdParaIntegradora = [];
+        foreach ($integradoras as $integ) {
+            $idsSubarvore = \App\Services\EmpresaService::subarvoreIds((int) $integ['id'], $pdo);
+            foreach ($idsSubarvore as $empId) {
+                $empresaIdParaIntegradora[$empId] = $integ['nome_fantasia'];
+            }
+        }
+
+        // Agrupa os controladores pela integradora raiz (via mapa); fallback para "— Sem integradora —"
+        foreach ($controladoresAcessiveis as $c) {
+            $chave = $empresaIdParaIntegradora[(int) ($c['empresa_id'] ?? 0)] ?? '— Sem integradora —';
+            if (!isset($gruposPorEmpresa[$chave])) {
+                $gruposPorEmpresa[$chave] = [];
+            }
+            $gruposPorEmpresa[$chave][] = $c;
+        }
+    }
+
     $mostrarPill = isset($controladoresAcessiveis) && count($controladoresAcessiveis) > 0 && isset($controladorAtivo);
     if (isset($estadoA) && $estadoA && count($controladoresAcessiveis) > 1) $mostrarPill = false;
     ?>
@@ -155,11 +204,15 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
             <?php if (count($controladoresAcessiveis) > 1): ?>
                 <select id="sel-controlador-global" class="sel-ctrl" onchange="trocarControlador(this.value)" style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); color: var(--color-text, #0f172a); padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; outline: none; cursor: pointer; min-width: 150px;">
                     <option value="" disabled>Selecione um controlador...</option>
-                    <?php foreach ($controladoresAcessiveis as $c): ?>
-                        <option value="<?php echo $c['id']; ?>" <?php echo $c['id'] == $controladorAtivo['id'] ? 'selected' : ''; ?>
-                                title="<?php echo e($c['codigo'] . ($c['apelido'] ? ' — ' . $c['apelido'] : '')); ?>">
-                            <?php echo e($c['apelido'] ?: $c['codigo']); ?>
-                        </option>
+                    <?php foreach ($gruposPorEmpresa as $nomeEmpresa => $controladoresDoGrupo): ?>
+                        <optgroup label="<?php echo e($nomeEmpresa); ?>">
+                            <?php foreach ($controladoresDoGrupo as $c): ?>
+                                <option value="<?php echo $c['id']; ?>" <?php echo $c['id'] == $controladorAtivo['id'] ? 'selected' : ''; ?>
+                                        title="<?php echo e($c['codigo'] . ($c['apelido'] ? ' — ' . $c['apelido'] : '')); ?>">
+                                    <?php echo e($c['apelido'] ?: $c['codigo']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </optgroup>
                     <?php endforeach; ?>
                 </select>
                 <script>
@@ -259,7 +312,7 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
         <?php foreach ($_configItems as $item): ?>
         <li>
             <a href="<?php echo e(appUrl('/' . $item['href'])); ?>"
-               class="drawer-link <?php echo $_paginaAtual === ($item['id'] ?? '') ? 'active' : ''; ?>">
+               class="drawer-link <?php echo ($_paginaAtual === ($item['id'] ?? '') || ($item['id'] === 'empresas_lista' && $_paginaAtual === 'empresas')) ? 'active' : ''; ?>">
                 <span class="drawer-icon"><?php echo $item['icon']; ?></span>
                 <span><?php echo e($item['label']); ?></span>
             </a>
@@ -267,3 +320,78 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
         <?php endforeach; ?>
     </ul>
 </nav>
+
+<?php
+if (!empty($_SESSION['usuario']['forcar_troca_senha']) || !empty($_SESSION['forcar_troca_senha'])):
+?>
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL BLOQUEANTE — Troca Obrigatória de Senha
+════════════════════════════════════════════════════════════ -->
+<div id="modalTrocaSenha" style="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);">
+  <div style="background:#10233f;padding:24px;border-radius:10px;max-width:380px;width:90%;box-shadow:0 12px 30px rgba(0,0,0,0.6);border:1px solid #1a3a60;color:#fff;font-family:inherit;">
+    <h3 style="margin-top:0;margin-bottom:10px;font-size:18px;color:#fff;">Defina sua nova senha</h3>
+    <p style="color:#b0c4de;font-size:13px;line-height:1.4;margin-bottom:16px;">Por segurança, você precisa cadastrar uma nova senha antes de continuar utilizando o sistema.</p>
+    <form id="formTrocaSenha">
+      <div style="margin-bottom:12px;">
+        <label for="novaSenha" style="display:block;font-size:12px;color:#8ba3c7;margin-bottom:4px;">Nova Senha (mínimo 6 caracteres)</label>
+        <input type="password" id="novaSenha" required minlength="6" autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:6px;border:1px solid #2a3f5f;background:#0d1526;color:#fff;font-size:14px;outline:none;">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label for="confirmaSenha" style="display:block;font-size:12px;color:#8ba3c7;margin-bottom:4px;">Confirmar Senha</label>
+        <input type="password" id="confirmaSenha" required minlength="6" autocomplete="new-password" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:6px;border:1px solid #2a3f5f;background:#0d1526;color:#fff;font-size:14px;outline:none;">
+      </div>
+      <button type="submit" id="btnSalvarNovaSenha" style="width:100%;padding:10px 16px;background:#00d26a;color:#0b192c;border:none;border-radius:6px;font-weight:600;font-size:14px;cursor:pointer;">Salvar e continuar</button>
+    </form>
+    <div id="erroTrocaSenha" style="color:#ff6b6b;margin-top:10px;font-size:13px;min-height:18px;"></div>
+  </div>
+</div>
+<script>
+(function() {
+    const form = document.getElementById('formTrocaSenha');
+    if (!form) return;
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const novaSenha = document.getElementById('novaSenha').value;
+        const confirmaSenha = document.getElementById('confirmaSenha').value;
+        const erroDiv = document.getElementById('erroTrocaSenha');
+        const btn = document.getElementById('btnSalvarNovaSenha');
+
+        erroDiv.textContent = '';
+
+        if (novaSenha !== confirmaSenha) {
+            erroDiv.textContent = 'As senhas não coincidem.';
+            return;
+        }
+
+        if (novaSenha.length < 6) {
+            erroDiv.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+
+        try {
+            const resp = await fetch('<?php echo e(appUrl("/api/usuarios/trocar_senha.php")); ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ senha: novaSenha })
+            });
+            const data = await resp.json();
+            if (data && data.sucesso) {
+                location.reload();
+            } else {
+                erroDiv.textContent = (data && data.erro) ? data.erro : 'Erro ao trocar senha.';
+                btn.disabled = false;
+                btn.textContent = 'Salvar e continuar';
+            }
+        } catch (err) {
+            erroDiv.textContent = 'Erro ao se comunicar com o servidor.';
+            btn.disabled = false;
+            btn.textContent = 'Salvar e continuar';
+        }
+    });
+})();
+</script>
+<?php endif; ?>
+

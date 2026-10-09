@@ -1,0 +1,317 @@
+/**
+ * ============================================================
+ * Arquivo   : assets/css/empresas_lista.css
+ * Projeto   : CIP — Controlador de Injeção de Potência Elétrica
+ * Versão    : 1.1.0
+ * Modificado: 2026-10-09
+ * Objetivo  : Estilos da listagem hierárquica de empresas com
+ *             rollup de geração e suporte responsivo (desktop/mobile).
+ *
+ * Dependências de software/arquivos:
+ *   - assets/css/app.css
+ *   - assets/css/header.css
+ *   - empresas_lista.php
+ *
+ * Histórico de implementações:
+ *   2026-09-14  v1.0.0  Criação inicial da folha de estilos (CIP-DEC-20260914-003)
+ *   2026-10-09  v1.1.0  Ajuste de especificidade do seletor para compensar header fixo (CIP-DEC-20261009-003)
+ * ============================================================
+ */
+
+main.app-content.empresas-lista {
+    padding-top: 96px;   /* 72px (header mobile) + 24px (respiro da página) */
+    padding-bottom: 48px;
+}
+
+@media (min-width: 768px) {
+    main.app-content.empresas-lista {
+        padding-top: 104px; /* 80px (header desktop) + 24px (respiro da página) */
+    }
+}
+
+.empresas-header-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.pagina-titulo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--cor-texto, #1f2937);
+    margin: 0 0 6px 0;
+}
+
+.pagina-subtitulo {
+    font-size: 0.9rem;
+    color: var(--cor-texto-suave, #64748b);
+    margin: 0;
+}
+
+.lista-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* ── Toggle de Período (Dia / Mês) ── */
+.periodo-toggle {
+    display: inline-flex;
+    background-color: var(--cor-superficie-suave, #f1f5f9);
+    border: 1px solid var(--cor-borda, #dbe3ee);
+    border-radius: var(--raio-controle, 8px);
+    padding: 3px;
+}
+
+.periodo-btn {
+    padding: 6px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--cor-texto-suave, #64748b);
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.periodo-btn:hover {
+    color: var(--cor-texto, #1f2937);
+}
+
+.periodo-btn.is-active {
+    background-color: var(--cor-primaria, #2563eb);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.btn-nova-empresa {
+    padding: 7px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: var(--raio-controle, 8px);
+}
+
+/* ── Tabela Hierárquica ── */
+.empresa-tabela-container {
+    background: var(--cor-superficie, #ffffff);
+    border: 1px solid var(--cor-borda, #dbe3ee);
+    border-radius: var(--raio-painel, 12px);
+    box-shadow: var(--sombra-padrao, 0 4px 12px rgba(15, 23, 42, 0.05));
+    overflow-x: auto;
+}
+
+.empresa-tabela {
+    min-width: 760px;
+    display: flex;
+    flex-direction: column;
+}
+
+.et-head {
+    display: grid;
+    grid-template-columns: 2.5fr 1.2fr 0.8fr 1fr 1.5fr 1fr;
+    align-items: center;
+    padding: 12px 18px;
+    background-color: var(--cor-superficie-suave, #f8fafc);
+    border-bottom: 1px solid var(--cor-borda, #dbe3ee);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--cor-texto-suave, #64748b);
+}
+
+.et-row {
+    display: grid;
+    grid-template-columns: 2.5fr 1.2fr 0.8fr 1fr 1.5fr 1fr;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--cor-borda, #e2e8f0);
+    font-size: 0.9rem;
+    color: var(--cor-texto, #1f2937);
+    transition: background-color 0.15s ease;
+}
+
+.et-row:last-child {
+    border-bottom: none;
+}
+
+.et-row:hover {
+    background-color: var(--cor-superficie-suave, #f8fafc);
+}
+
+.col-center {
+    text-align: center;
+}
+
+.col-right {
+    text-align: right;
+}
+
+.col-acoes {
+    text-align: right;
+}
+
+.et-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.et-toggle {
+    background: transparent;
+    border: 1px solid var(--cor-borda, #dbe3ee);
+    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--cor-texto-suave, #64748b);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.et-toggle:hover {
+    background-color: var(--cor-superficie-suave, #e2e8f0);
+    color: var(--cor-texto, #1f2937);
+    border-color: var(--cor-texto-suave, #94a3b8);
+}
+
+.et-nome {
+    font-weight: 600;
+    color: var(--cor-texto, #0f172a);
+}
+
+.badge-num {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: var(--cor-superficie-suave, #f1f5f9);
+    border: 1px solid var(--cor-borda, #e2e8f0);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--cor-texto-suave, #475569);
+}
+
+.badge-tipo {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-integradora_virtual {
+    background: rgba(124, 58, 237, 0.12);
+    color: #7c3aed;
+    border: 1px solid rgba(124, 58, 237, 0.25);
+}
+
+.badge-cliente_real {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+    border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+.badge-parceiro {
+    background: rgba(8, 145, 178, 0.12);
+    color: #0891b2;
+    border: 1px solid rgba(8, 145, 178, 0.25);
+}
+
+.badge-demo {
+    background: rgba(217, 119, 6, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(217, 119, 6, 0.25);
+}
+
+.badge-inativo {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.et-geracao {
+    font-feature-settings: 'tnum';
+    color: var(--cor-sucesso, #15803d);
+}
+
+.et-geracao strong {
+    font-size: 0.95rem;
+}
+
+.btn-detalhe {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 6px;
+    background-color: var(--cor-superficie-suave, #f1f5f9);
+    border: 1px solid var(--cor-borda, #cbd5e1);
+    color: var(--cor-texto, #334155);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-detalhe:hover {
+    background-color: var(--cor-primaria, #2563eb);
+    border-color: var(--cor-primaria, #2563eb);
+    color: #ffffff;
+}
+
+/* ── Linha Expandida (Detalhes) ── */
+.et-expand {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    padding: 12px 16px;
+    background-color: var(--cor-superficie-suave, #f8fafc);
+    border: 1px dashed var(--cor-borda, #cbd5e1);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.et-expand-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.expand-field {
+    display: flex;
+    gap: 6px;
+}
+
+.field-label {
+    font-weight: 600;
+    color: var(--cor-texto-suave, #64748b);
+}
+
+.field-value {
+    color: var(--cor-texto, #1e293b);
+}
+
+.et-empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--cor-texto-suave, #64748b);
+    font-size: 0.9rem;
+}
+
+/* ── Ajustes Mobile ── */
+@media (max-width: 768px) {
+    .empresas-header-box {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .lista-toolbar {
+        justify-content: space-between;
+    }
+}

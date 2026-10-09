@@ -1,745 +1,521 @@
 <?php
+declare(strict_types=1);
 /**
- * =============================================================================
- * Projeto    : CIP - Controlador de Injecao de Potencia Eletrica
- * Arquivo    : public_html/usuarios.php
- * Objetivo   : Modulo administrativo de usuarios com segregacao por perfil e
- *              por empresa, incluindo listagem e fluxo de pre-cadastro por convite
- *
- * Dependencias de hardware:
- *   - Servidor com MySQL/MariaDB acessivel
- *   - Navegador com suporte a HTML5, CSS3 e JavaScript
- *
- * Dependencias de software:
- *   - PHP 7.4+
- *   - app/auth.php
- *   - app/services/UsuarioPermissaoService.php
- *   - app/services/UsuarioConviteService.php
- *   - config/database.php
- *   - includes/app_head.php
- *   - includes/app_header.php
- *
- * Regras obrigatorias:
- *   - viewer nao acessa usuarios.php
- *   - operador atua apenas na propria empresa
- *   - master/master_operador possuem visao global
- *   - cadastro segue fluxo de pre-cadastro por convite
- *   - remocao fisica nao deve ser utilizada
- *
- * Historico de implementacoes:
- *   - 2026-04-29 | v1.0 | Estrutura inicial aderente ao documento funcional
- *   - 2026-04-30 | v1.1 | Inclusao da acao novo com pre-cadastro por convite
- *   - 2026-04-30 | v1.2 | Persistencia real via PDO para pre-cadastro de usuarios
- * =============================================================================
+ * @arquivo       usuarios.php
+ * @versao        2.0.0
+ * @modificado_em 2026-10-09
+ * @objetivo      Listagem de usuários do sistema, com escopo por perfil (master/master_operador
+ *                vê todos; administrador/operador vê apenas da própria empresa), exibição de
+ *                empresas vinculadas (empresa padrão + dropdown "+"), geração agora (kW) agregada
+ *                e filtro inteligente client-side.
+ * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 
-declare(strict_types=1);
+require_once __DIR__ . '/config/app.php';
+require_once __DIR__ . '/app/auth.php';
+require_once __DIR__ . '/config/database.php';
 
-$baseDir = dirname(__DIR__);
-if (is_dir(__DIR__ . '/app') && is_dir(__DIR__ . '/includes')) {
-    $baseDir = __DIR__;
-}
-
-require_once $baseDir . '/app/auth.php';
-require_once $baseDir . '/app/services/UsuarioPermissaoService.php';
-require_once $baseDir . '/app/services/UsuarioConviteService.php';
-require_once $baseDir . '/config/database.php';
-
+startSecureSession();
 requireAuth();
 
-try {
-    $pdo = getDbConnection();
-} catch (Throwable $e) {
-    http_response_code(500);
-    exit('Erro interno: falha ao conectar ao banco de dados.');
+if (!function_exists('e')) {
+    function e($valor): string
+    {
+        return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8');
+    }
 }
 
-$perfilUsuario = (string) ($_SESSION['usuario_perfil'] ?? '');
-$usuarioId     = (int) ($_SESSION['usuario_id'] ?? 0);
-$empresaSessao = (int) ($_SESSION['empresa_id'] ?? 0);
-$usuarioNome   = (string) ($_SESSION['usuario_nome'] ?? 'Usuário');
+if (!function_exists('appUrl')) {
+    function appUrl(string $path = ''): string
+    {
+        return APP_URL . APP_BASE_PATH . $path;
+    }
+}
 
-if (!UsuarioPermissaoService::podeAcessarModulo($perfilUsuario)) {
-    header('Location: dashboard.php?msg=acesso_negado');
+$appTituloPagina = 'Usuários';
+$appPaginaAtual  = 'usuarios';
+
+$usuarioLogado   = $_SESSION['usuario'] ?? [];
+$perfilLogado    = (string) ($usuarioLogado['perfil'] ?? $_SESSION['usuario_perfil'] ?? '');
+$empresaIdLogado = $usuarioLogado['empresa_id'] ?? $_SESSION['empresa_id'] ?? null;
+
+// Apenas operadores, administradores e masters têm acesso à gestão
+if (!in_array($perfilLogado, ['master', 'master_operador', 'administrador', 'operador'], true)) {
+    http_response_code(403);
+    echo '<p style="font-family:sans-serif;padding:20px;color:#d97f7f;">Acesso negado. Perfil sem permissão para gerenciar usuários.</p>';
     exit;
 }
 
-$ehMasterGlobal = UsuarioPermissaoService::temVisaoGlobal($perfilUsuario);
-$ehOperador     = ($perfilUsuario === UsuarioPermissaoService::PERFIL_OPERADOR);
+$escopoGlobal = in_array($perfilLogado, ['master', 'master_operador'], true);
 
-$appTituloPagina     = 'Usuários';
-$appPaginaAtual      = 'usuarios';
-$appUsuarioNome      = $usuarioNome;
-$appEmpresaNome      = 'Controlador de Injeção de Potência Elétrica';
-$appEmpresaLogoTexto = 'CI';
-$appIsAdmin          = in_array($perfilUsuario, [
-    UsuarioPermissaoService::PERFIL_MASTER,
-    UsuarioPermissaoService::PERFIL_MASTER_OPERADOR,
-    UsuarioPermissaoService::PERFIL_ADMINISTRADOR,
-], true);
-
-$usuarioAutenticado = [
-    'id' => $usuarioId,
-    'perfil' => $perfilUsuario,
-    'empresa_id' => $empresaSessao,
-    'nome' => $usuarioNome,
-];
-
-$acao = (string) ($_GET['acao'] ?? 'listar');
-
-$empresaIdSolicitada = isset($_GET['empresa_id']) ? (int) $_GET['empresa_id'] : null;
-if ($empresaIdSolicitada !== null && $empresaIdSolicitada <= 0) {
-    $empresaIdSolicitada = null;
-}
-
-$empresaIdSelecionada = UsuarioPermissaoService::resolverEmpresaAlvo(
-    $perfilUsuario,
-    $empresaSessao > 0 ? $empresaSessao : null,
-    $empresaIdSolicitada
-);
-
-if ($empresaIdSelecionada === null) {
-    $empresaIdSelecionada = 0;
-}
-
-$mensagem = null;
-$erros = [];
-$empresas = [];
+$erro = null;
 $usuarios = [];
 
-$formNovo = [
-    'empresa_id' => $empresaIdSelecionada,
-    'email' => '',
-    'perfil' => UsuarioPermissaoService::PERFIL_VIEWER,
-];
+try {
+    $pdo = getDbConnection();
 
-/**
- * -----------------------------------------------------------------------------
- * Funcoes auxiliares locais
- * -----------------------------------------------------------------------------
- */
-function buscarEmpresas(PDO $pdo): array
-{
-    $sql = '
-        SELECT
-            id,
-            nome_fantasia AS nome
-        FROM empresa
-        ORDER BY nome_fantasia ASC
-    ';
-
-    $stmt = $pdo->query($sql);
-
-    if (!$stmt instanceof PDOStatement) {
-        return [];
+    if ($escopoGlobal) {
+        $sql = "
+            SELECT u.id, u.nome, u.email, u.perfil, u.ativo, u.empresa_id,
+                   e.nome_fantasia AS empresa_padrao
+            FROM usuarios u
+            LEFT JOIN empresa e ON e.id = u.empresa_id
+            WHERE u.deleted_at IS NULL
+            ORDER BY u.nome ASC
+        ";
+        $stmt = $pdo->query($sql);
+    } else {
+        $sql = "
+            SELECT u.id, u.nome, u.email, u.perfil, u.ativo, u.empresa_id,
+                   e.nome_fantasia AS empresa_padrao
+            FROM usuarios u
+            LEFT JOIN empresa e ON e.id = u.empresa_id
+            WHERE u.deleted_at IS NULL
+              AND u.empresa_id = :empresa_id
+            ORDER BY u.nome ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['empresa_id' => $empresaIdLogado]);
     }
+    $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-}
-
-
-function buscarUsuariosPorEmpresa(PDO $pdo, ?int $empresaId = null, bool $visaoGlobal = false): array
-{
-    $sql = '
-        SELECT
-            u.id,
-            u.nome,
-            u.email,
-            u.perfil,
-            u.empresa_id,
-            u.ativo,
-            u.criado_em,
-            u.atualizado_em,
-            e.nome_fantasia AS empresa_nome
-        FROM usuarios u
-        LEFT JOIN empresa e ON e.id = u.empresa_id
-    ';
-
-    $params = [];
-
-    if (!$visaoGlobal) {
-        $sql .= ' WHERE u.empresa_id = :empresa_id ';
-        $params[':empresa_id'] = $empresaId;
-    } elseif ($empresaId !== null) {
-        $sql .= ' WHERE u.empresa_id = :empresa_id ';
-        $params[':empresa_id'] = $empresaId;
-    }
-
-    $sql .= ' ORDER BY u.nome ASC ';
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-
-    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-}
-
-
-function existeUsuarioPorEmailEmpresa(PDO $pdo, int $empresaId, string $email): bool
-{
-    $sql = '
-        SELECT id
-        FROM usuarios
-        WHERE empresa_id = :empresa_id
-          AND LOWER(email) = LOWER(:email)
-        LIMIT 1
-    ';
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':empresa_id', $empresaId, PDO::PARAM_INT);
-    $stmt->bindValue(':email', $email, PDO::PARAM_STR);
-    $stmt->execute();
-
-    return (bool) $stmt->fetchColumn();
-}
-
-function inserirPreCadastroUsuario(PDO $pdo, array $dados): int
-{
-    $sql = '
-        INSERT INTO usuarios (
-            empresa_id,
-            nome,
-            email,
-            perfil,
-            ativo,
-            status_cadastro,
-            token_convite,
-            convite_expira_em,
-            criado_por,
-            ultimo_acesso,
-            created_at,
-            updated_at
-        ) VALUES (
-            :empresa_id,
-            :nome,
-            :email,
-            :perfil,
-            :ativo,
-            :status_cadastro,
-            :token_convite,
-            :convite_expira_em,
-            :criado_por,
-            :ultimo_acesso,
-            :created_at,
-            :updated_at
-        )
-    ';
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':empresa_id', (int) $dados['empresa_id'], PDO::PARAM_INT);
-    $stmt->bindValue(':nome', $dados['nome'], PDO::PARAM_NULL);
-    $stmt->bindValue(':email', (string) $dados['email'], PDO::PARAM_STR);
-    $stmt->bindValue(':perfil', (string) $dados['perfil'], PDO::PARAM_STR);
-    $stmt->bindValue(':ativo', (int) $dados['ativo'], PDO::PARAM_INT);
-    $stmt->bindValue(':status_cadastro', (string) $dados['status_cadastro'], PDO::PARAM_STR);
-    $stmt->bindValue(':token_convite', (string) $dados['token_convite'], PDO::PARAM_STR);
-    $stmt->bindValue(':convite_expira_em', (string) $dados['convite_expira_em'], PDO::PARAM_STR);
-    $stmt->bindValue(':criado_por', (int) $dados['criado_por'], PDO::PARAM_INT);
-    $stmt->bindValue(':ultimo_acesso', null, PDO::PARAM_NULL);
-    $stmt->bindValue(':created_at', (string) $dados['created_at'], PDO::PARAM_STR);
-    $stmt->bindValue(':updated_at', (string) $dados['updated_at'], PDO::PARAM_STR);
-    $stmt->execute();
-
-    return (int) $pdo->lastInsertId();
-}
-
-/**
- * -----------------------------------------------------------------------------
- * Carga inicial de empresas
- * -----------------------------------------------------------------------------
- */
-if ($ehMasterGlobal) {
-    try {
-        $empresas = buscarEmpresas($pdo);
-    } catch (Throwable $e) {
-        $erros[] = 'Não foi possível carregar a lista de empresas.';
-    }
-}
-
-/**
- * -----------------------------------------------------------------------------
- * Processamento da acao novo
- * -----------------------------------------------------------------------------
- */
-if ($acao === 'novo' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $formNovo['empresa_id'] = isset($_POST['empresa_id']) ? (int) $_POST['empresa_id'] : 0;
-    $formNovo['email'] = trim((string) ($_POST['email'] ?? ''));
-    $formNovo['perfil'] = trim((string) ($_POST['perfil'] ?? ''));
-
-    if ($ehOperador) {
-        $formNovo['empresa_id'] = $empresaSessao;
-    }
-
-    if ($formNovo['empresa_id'] <= 0) {
-        $erros[] = 'Selecione uma empresa válida.';
-    }
-
-    if (!UsuarioConviteService::emailValido($formNovo['email'])) {
-        $erros[] = 'Informe um e-mail válido.';
-    }
-
-    if (!UsuarioPermissaoService::podeCriarPerfil($perfilUsuario, $formNovo['perfil'])) {
-        $erros[] = 'Você não possui permissão para criar este perfil.';
-    }
-
-    if ($ehOperador && $formNovo['empresa_id'] !== $empresaSessao) {
-        $erros[] = 'Operador pode cadastrar usuários apenas na própria empresa.';
-    }
-
-    if ($erros === []) {
-        try {
-            $emailNormalizado = UsuarioConviteService::normalizarEmail($formNovo['email']);
-
-            if (existeUsuarioPorEmailEmpresa($pdo, $formNovo['empresa_id'], $emailNormalizado)) {
-                $erros[] = 'Já existe um usuário cadastrado com este e-mail para a empresa selecionada.';
-            } else {
-                $preCadastro = UsuarioConviteService::montarPreCadastro(
-                    $formNovo['empresa_id'],
-                    $emailNormalizado,
-                    $formNovo['perfil'],
-                    $usuarioId,
-                    1,
-                    7
-                );
-
-                $preCadastro['nome'] = null;
-
-                $pdo->beginTransaction();
-                $novoUsuarioId = inserirPreCadastroUsuario($pdo, $preCadastro);
-                $pdo->commit();
-
-                header(
-                    'Location: usuarios.php?empresa_id='
-                    . (int) $preCadastro['empresa_id']
-                    . '&msg=pre_cadastro_criado&id='
-                    . $novoUsuarioId
-                );
-                exit;
-            }
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-
-            $erros[] = 'Falha ao criar o pré-cadastro do usuário.';
+    // Vínculos extras (usuario_empresa) por usuário
+    $vinculos = [];
+    if (!empty($usuarios)) {
+        $ids = array_column($usuarios, 'id');
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmtV = $pdo->prepare("
+            SELECT ue.usuario_id, ue.empresa_id, e.nome_fantasia AS empresa_nome, ue.papel_empresa
+            FROM usuario_empresa ue
+            JOIN empresa e ON e.id = ue.empresa_id
+            WHERE ue.usuario_id IN ($placeholders)
+              AND ue.ativo = 1
+              AND ue.deleted_at IS NULL
+            ORDER BY e.nome_fantasia ASC
+        ");
+        $stmtV->execute($ids);
+        foreach ($stmtV->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $vinculos[$row['usuario_id']][] = $row;
         }
     }
-}
 
-/**
- * -----------------------------------------------------------------------------
- * Mensagens de retorno
- * -----------------------------------------------------------------------------
- */
-$msg = (string) ($_GET['msg'] ?? '');
-if ($msg === 'pre_cadastro_criado') {
-    $mensagem = 'Pré-cadastro criado com sucesso. O usuário foi registrado com convite pendente.';
-}
-
-/**
- * -----------------------------------------------------------------------------
- * Perfis disponiveis para criacao
- * -----------------------------------------------------------------------------
- */
-$perfisDisponiveis = [];
-foreach ([
-    UsuarioPermissaoService::PERFIL_ADMINISTRADOR,
-    UsuarioPermissaoService::PERFIL_OPERADOR,
-    UsuarioPermissaoService::PERFIL_VIEWER,
-] as $perfilNovo) {
-    if (UsuarioPermissaoService::podeCriarPerfil($perfilUsuario, $perfilNovo)) {
-        $perfisDisponiveis[] = $perfilNovo;
-    }
-}
-
-/**
- * -----------------------------------------------------------------------------
- * Listagem
- * -----------------------------------------------------------------------------
- */
-if ($acao !== 'novo') {
-    if ($ehOperador && $empresaSessao > 0) {
-        $empresaIdSelecionada = $empresaSessao;
-    }
-
-    if ((!$ehMasterGlobal && $empresaIdSelecionada > 0) || ($ehMasterGlobal && $empresaIdSelecionada > 0)) {
-        try {
-            $usuarios = buscarUsuariosPorEmpresa($pdo, $empresaIdSelecionada);
-        } catch (Throwable $e) {
-            $erros[] = 'Não foi possível carregar os usuários da empresa selecionada.';
+    // Geração agora (kW) — soma dos controladores das empresas vinculadas (padrão + usuario_empresa)
+    foreach ($usuarios as &$u) {
+        $empresaIds = [];
+        if (!empty($u['empresa_id'])) {
+            $empresaIds[] = (int) $u['empresa_id'];
         }
+        foreach ($vinculos[$u['id']] ?? [] as $v) {
+            $empresaIds[] = (int) $v['empresa_id'];
+        }
+        $empresaIds = array_unique($empresaIds);
+
+        $geracaoW = 0.0;
+        if (!empty($empresaIds)) {
+            $placeholdersE = implode(',', array_fill(0, count($empresaIds), '?'));
+            $stmtG = $pdo->prepare("
+                SELECT COALESCE(SUM(t.potencia_geracao_w), 0) AS total_w
+                FROM controladores c
+                JOIN telemetria_5min t ON t.controlador_id = c.id
+                WHERE c.empresa_id IN ($placeholdersE)
+                  AND t.timestamp_utc = (
+                      SELECT MAX(t2.timestamp_utc)
+                      FROM telemetria_5min t2
+                      WHERE t2.controlador_id = c.id
+                  )
+            ");
+            $stmtG->execute(array_values($empresaIds));
+            $geracaoW = (float) ($stmtG->fetchColumn() ?: 0);
+        }
+
+        // telemetria_5min.potencia_geracao_w está em Watts → dividir por 1000 para kW
+        $u['geracao_kw']      = round($geracaoW / 1000, 2);
+        $u['_empresas_extra'] = $vinculos[$u['id']] ?? [];
     }
+    unset($u);
+
+} catch (Throwable $e) {
+    error_log('[usuarios.php] Erro ao carregar usuários: ' . $e->getMessage());
+    $erro = 'Erro ao processar listagem de usuários.';
+    $usuarios = [];
 }
+
+$sucesso = isset($_GET['salvo']) ? 'Usuário salvo com sucesso.' : null;
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR" data-tema="escuro">
 <head>
-    <?php require $baseDir . '/includes/app_head.php'; ?>
+    <?php require __DIR__ . '/includes/app_head.php'; ?>
+    <script src="<?php echo e(appUrl('/assets/js/smart-filter.js')); ?>"></script>
     <style>
-        .wrap {
-            max-width: 1440px;
+        .usuarios-container {
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 80px 24px 40px;
+            padding: 16px;
         }
-
-        .page-card {
-            background: #0d1526;
-            border: 1px solid #1a2d4a;
-            border-radius: 14px;
+        .panel {
+            background: var(--card-bg, #10233f);
+            border-radius: 10px;
+            border: 1px solid var(--border-color, #1a3a60);
             padding: 24px;
-            color: #e0eaf8;
-            box-shadow: 0 2px 12px rgba(0,0,0,.4);
+            margin-top: 16px;
         }
-
-        .page-head {
+        .panel-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-
-        .page-title {
-            font-size: 22px;
-            font-weight: 700;
-            margin: 0;
-        }
-
-        .page-subtitle {
-            font-size: 14px;
-            color: #7a9cc4;
-            margin-top: 6px;
-        }
-
-        .toolbar {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
             align-items: center;
             margin-bottom: 20px;
-        }
-
-        .sel, .inp {
-            background: #0d1526;
-            color: #e0eaf8;
-            border: 1px solid #1a2d4a;
-            border-radius: 10px;
-            padding: 10px 14px;
-            min-width: 260px;
-        }
-
-        .btn {
-            background: #0070cc;
-            color: #fff;
-            border: none;
-            border-radius: 10px;
-            padding: 10px 16px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-sec {
-            background: transparent;
-            border: 1px solid #1a2d4a;
-            color: #e0eaf8;
-            border-radius: 8px;
-            padding: 6px 10px;
-            font-size: 12px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .table-wrap {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        th, td {
-            text-align: left;
-            padding: 12px 10px;
-            border-bottom: 1px solid #1a2d4a;
-        }
-
-        th {
-            color: #7a9cc4;
-            font-size: 11px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        td {
-            color: #e0eaf8;
-            vertical-align: middle;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 700;
-        }
-
-        .b-ativo     { background: rgba(0, 230, 118, 0.12); color: #00e676; }
-        .b-inativo   { background: rgba(255, 82, 82, 0.12); color: #ff5252; }
-        .b-pendente  { background: rgba(255, 193, 7, 0.12); color: #ffc107; }
-        .b-concluido { background: rgba(0, 180, 255, 0.12); color: #00b4ff; }
-
-        .acoes {
-            display: flex;
-            gap: 8px;
             flex-wrap: wrap;
+            gap: 12px;
         }
-
-        .empty {
-            color: #7a9cc4;
-            padding: 20px 0 4px;
+        .panel-title {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #fff;
+        }
+        .panel-subtitle {
+            margin: 4px 0 0 0;
+            font-size: 0.875rem;
+            color: #8ba3c7;
+        }
+        .btn-novo {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #00d26a;
+            color: #0b192c;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn-novo:hover {
+            background: #00b85c;
+        }
+        .filtro-box {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            background: rgba(13, 21, 38, 0.7);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #1a3a60;
+        }
+        .filtro-box input {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid #2a4365;
+            background: #0d1526;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+        }
+        .filtro-box input:focus {
+            border-color: #38bdf8;
+        }
+        .filtro-contador {
+            font-size: 13px;
+            color: #8ba3c7;
+            white-space: nowrap;
+        }
+        .usuarios-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .usuario-card-header {
+            display: grid;
+            grid-template-columns: 2.2fr 2fr 1.2fr 1.2fr 1.2fr;
+            padding: 10px 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #8ba3c7;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #1a3a60;
+        }
+        .usuario-card {
+            display: grid;
+            grid-template-columns: 2.2fr 2fr 1.2fr 1.2fr 1.2fr;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            background: rgba(13, 21, 38, 0.5);
+            border: 1px solid #1a3a60;
+            border-radius: 8px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .usuario-card:hover {
+            background: rgba(16, 35, 63, 0.9);
+            border-color: #2b568d;
+        }
+        .usuario-info-nome {
+            font-weight: 600;
+            color: #fff;
             font-size: 14px;
         }
-
-        .footer {
-            text-align: center;
-            color: #3a5070;
-            font-size: 11px;
-            padding-top: 20px;
-            border-top: 1px solid #1a2d4a;
-            margin-top: 24px;
+        .usuario-info-email {
+            font-size: 13px;
+            color: #8ba3c7;
+            margin-top: 2px;
         }
-
-        .alert {
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .badge-ativo {
+            background: rgba(30, 70, 32, 0.6);
+            color: #7fd98a;
+            border: 1px solid #2d6a30;
+        }
+        .badge-inativo {
+            background: rgba(74, 30, 30, 0.6);
+            color: #d97f7f;
+            border: 1px solid #6a2d2d;
+        }
+        .badge-perfil {
+            background: rgba(23, 42, 69, 0.8);
+            color: #38bdf8;
+            border: 1px solid #1e3a5f;
+            text-transform: capitalize;
+        }
+        .badge-perfil-master {
+            background: rgba(88, 28, 135, 0.4);
+            color: #c084fc;
+            border: 1px solid #7e22ce;
+        }
+        .badge-perfil-admin {
+            background: rgba(29, 78, 216, 0.4);
+            color: #93c5fd;
+            border: 1px solid #2563eb;
+        }
+        .empresa-extra {
+            position: relative;
+            display: inline-block;
+            margin-left: 6px;
+            cursor: pointer;
+            background: #1e3a5f;
+            color: #38bdf8;
+            padding: 2px 7px;
             border-radius: 10px;
-            padding: 12px 14px;
+            font-size: 11px;
+            font-weight: bold;
+            user-select: none;
+        }
+        .empresa-extra-dropdown {
+            display: none;
+            position: absolute;
+            top: 120%;
+            left: 0;
+            background: #0d1526;
+            border: 1px solid #2a4365;
+            border-radius: 6px;
+            padding: 8px 12px;
+            z-index: 100;
+            white-space: nowrap;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+            min-width: 180px;
+        }
+        .empresa-extra.aberto .empresa-extra-dropdown {
+            display: block;
+        }
+        .empresa-extra-item {
+            padding: 4px 0;
+            font-size: 12px;
+            color: #cbd5e1;
+            border-bottom: 1px solid #1a2d4a;
+        }
+        .empresa-extra-item:last-child {
+            border-bottom: none;
+        }
+        .geracao-val {
+            font-size: 14px;
+            font-weight: 600;
+            color: #facc15;
+        }
+        .acoes-col {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: flex-start;
+        }
+        .btn-editar {
+            padding: 5px 12px;
+            border-radius: 4px;
+            background: #1e3a5f;
+            color: #93c5fd;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s, color 0.2s;
+        }
+        .btn-editar:hover {
+            background: #2b568d;
+            color: #fff;
+        }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
             margin-bottom: 16px;
             font-size: 14px;
         }
-
-        .alert-ok {
-            background: rgba(0, 230, 118, 0.10);
-            color: #7fffb0;
-            border: 1px solid rgba(0, 230, 118, 0.35);
+        .alert-success {
+            background: rgba(30, 70, 32, 0.8);
+            color: #7fd98a;
+            border: 1px solid #2d6a30;
         }
-
-        .alert-erro {
-            background: rgba(255, 82, 82, 0.10);
-            color: #ff9e9e;
-            border: 1px solid rgba(255, 82, 82, 0.35);
+        .alert-error {
+            background: rgba(74, 30, 30, 0.8);
+            color: #d97f7f;
+            border: 1px solid #6a2d2d;
         }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 16px;
-            margin-bottom: 20px;
-        }
-
-        .field {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .field label {
-            font-size: 13px;
-            color: #7a9cc4;
-        }
-
-        .form-actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 12px;
+        @media (max-width: 900px) {
+            .usuario-card-header {
+                display: none;
+            }
+            .usuario-card {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            .acoes-col {
+                justify-content: space-between;
+                margin-top: 8px;
+                padding-top: 8px;
+                border-top: 1px solid #1a2d4a;
+            }
         }
     </style>
 </head>
 <body>
-<?php require $baseDir . '/includes/app_header.php'; ?>
+    <div id="loading">
+        <div class="spin"></div>
+        <p>CARREGANDO USUÁRIOS...</p>
+    </div>
+    <?php require __DIR__ . '/includes/app_header.php'; ?>
 
-<div class="wrap">
-    <section class="page-card">
-        <div class="page-head">
-            <div>
-                <h1 class="page-title">Gerenciamento de Usuários</h1>
-                <p class="page-subtitle">
-                    Administração de usuários com segregação por perfil e empresa.
-                </p>
-            </div>
-
-            <?php if ($acao !== 'novo' && UsuarioPermissaoService::podeCriarPerfil($perfilUsuario, UsuarioPermissaoService::PERFIL_VIEWER)): ?>
-                <a class="btn" href="usuarios.php?acao=novo<?= $empresaIdSelecionada > 0 ? '&empresa_id=' . $empresaIdSelecionada : '' ?>">
-                    Novo Usuário
-                </a>
-            <?php endif; ?>
-        </div>
-
-        <?php if ($mensagem !== null): ?>
-            <div class="alert alert-ok">
-                <?= htmlspecialchars($mensagem, ENT_QUOTES, 'UTF-8') ?>
-            </div>
+    <main class="usuarios-container">
+        <?php if ($sucesso): ?>
+            <div class="alert alert-success"><?php echo e($sucesso); ?></div>
+        <?php endif; ?>
+        <?php if ($erro): ?>
+            <div class="alert alert-error"><?php echo e($erro); ?></div>
         <?php endif; ?>
 
-        <?php if ($erros !== []): ?>
-            <div class="alert alert-erro">
-                <ul>
-                    <?php foreach ($erros as $erro): ?>
-                        <li><?= htmlspecialchars($erro, ENT_QUOTES, 'UTF-8') ?></li>
+        <section class="panel">
+            <div class="panel-header">
+                <div>
+                    <h1 class="panel-title">Usuários<?php echo $escopoGlobal ? '' : ' da Empresa'; ?></h1>
+                    <p class="panel-subtitle">Gestão de acessos, perfis operacionais e vínculos de empresas</p>
+                </div>
+                <a href="<?php echo e(appUrl('/usuario_form.php')); ?>" class="btn-novo">+ Novo Usuário</a>
+            </div>
+
+            <div class="filtro-box">
+                <input type="text"
+                       id="filtroUsuarios"
+                       class="form-input"
+                       placeholder="🔍 Buscar por nome, e-mail, perfil ou empresa..."
+                       autocomplete="off">
+                <span id="filtroContadorUsuarios" class="filtro-contador"></span>
+            </div>
+
+            <div class="usuario-card-header">
+                <div>Usuário</div>
+                <div>Empresa</div>
+                <div>Perfil</div>
+                <div>Geração Agora</div>
+                <div>Ações</div>
+            </div>
+
+            <div class="usuarios-grid" id="listaUsuarios">
+                <?php if (empty($usuarios)): ?>
+                    <div style="text-align:center;padding:30px;color:#8ba3c7;">
+                        Nenhum usuário encontrado.
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($usuarios as $u): ?>
+                        <?php
+                            $extras   = $u['_empresas_extra'];
+                            $busca    = mb_strtolower(
+                                $u['nome'] . ' ' .
+                                $u['email'] . ' ' .
+                                $u['perfil'] . ' ' .
+                                ($u['empresa_padrao'] ?? '') . ' ' .
+                                implode(' ', array_column($extras, 'empresa_nome'))
+                            );
+
+                            $perfilClass = 'badge-perfil';
+                            if (str_starts_with($u['perfil'], 'master')) {
+                                $perfilClass = 'badge-perfil-master';
+                            } elseif ($u['perfil'] === 'administrador') {
+                                $perfilClass = 'badge-perfil-admin';
+                            }
+                        ?>
+                        <div class="usuario-card" data-busca="<?php echo e($busca); ?>">
+                            <div>
+                                <div class="usuario-info-nome"><?php echo e($u['nome']); ?></div>
+                                <div class="usuario-info-email"><?php echo e($u['email']); ?></div>
+                            </div>
+                            <div>
+                                <span style="color:#e2e8f0;"><?php echo e($u['empresa_padrao'] ?? '—'); ?></span>
+                                <?php if (!empty($extras)): ?>
+                                    <span class="empresa-extra" onclick="this.classList.toggle('aberto')">
+                                        +<?php echo count($extras); ?>
+                                        <div class="empresa-extra-dropdown">
+                                            <?php foreach ($extras as $ex): ?>
+                                                <div class="empresa-extra-item">
+                                                    <strong><?php echo e($ex['empresa_nome']); ?></strong><br>
+                                                    <span style="color:#8ba3c7;font-size:11px;"><?php echo e($ex['papel_empresa']); ?></span>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <span class="badge <?php echo $perfilClass; ?>">
+                                    <?php echo e($u['perfil']); ?>
+                                </span>
+                            </div>
+                            <div>
+                                <span class="geracao-val"><?php echo number_format($u['geracao_kw'], 2, ',', '.'); ?> kW</span>
+                            </div>
+                            <div class="acoes-col">
+                                <span class="badge <?php echo $u['ativo'] ? 'badge-ativo' : 'badge-inativo'; ?>">
+                                    <?php echo $u['ativo'] ? 'Ativo' : 'Inativo'; ?>
+                                </span>
+                                <a href="<?php echo e(appUrl('/usuario_form.php?id=' . (int) $u['id'])); ?>" class="btn-editar">Editar</a>
+                            </div>
+                        </div>
                     <?php endforeach; ?>
-                </ul>
+                <?php endif; ?>
             </div>
-        <?php endif; ?>
+        </section>
+    </main>
 
-        <?php if ($acao === 'novo'): ?>
-            <form method="post" action="usuarios.php?acao=novo<?= $empresaIdSelecionada > 0 ? '&empresa_id=' . $empresaIdSelecionada : '' ?>">
-                <div class="form-grid">
-                    <div class="field">
-                        <label for="empresa_id">Empresa integradora</label>
-                        <?php if ($ehMasterGlobal): ?>
-                            <select name="empresa_id" id="empresa_id" class="sel" required>
-                                <option value="0">Selecione uma empresa</option>
-                                <?php foreach ($empresas as $empresa): ?>
-                                    <option value="<?= (int) $empresa['id'] ?>" <?= (int) $formNovo['empresa_id'] === (int) $empresa['id'] ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars((string) $empresa['nome'], ENT_QUOTES, 'UTF-8') ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        <?php else: ?>
-                            <input type="hidden" name="empresa_id" value="<?= (int) $empresaSessao ?>">
-                            <input type="text" class="inp" value="Empresa #<?= (int) $empresaSessao ?>" disabled>
-                        <?php endif; ?>
-                    </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof attachSmartFilter === 'function') {
+            attachSmartFilter('filtroUsuarios', '.usuario-card', 'filtroContadorUsuarios');
+        }
 
-                    <div class="field">
-                        <label for="email">E-mail do convidado</label>
-                        <input
-                            type="email"
-                            name="email"
-                            id="email"
-                            class="inp"
-                            maxlength="150"
-                            value="<?= htmlspecialchars((string) $formNovo['email'], ENT_QUOTES, 'UTF-8') ?>"
-                            required
-                        >
-                    </div>
-
-                    <div class="field">
-                        <label for="perfil">Perfil</label>
-                        <select name="perfil" id="perfil" class="sel" required>
-                            <?php foreach ($perfisDisponiveis as $perfilNovo): ?>
-                                <option value="<?= htmlspecialchars($perfilNovo, ENT_QUOTES, 'UTF-8') ?>" <?= $formNovo['perfil'] === $perfilNovo ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($perfilNovo, ENT_QUOTES, 'UTF-8') ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn">Criar pré-cadastro</button>
-                    <a class="btn-sec" href="usuarios.php<?= $empresaIdSelecionada > 0 ? '?empresa_id=' . $empresaIdSelecionada : '' ?>">
-                        Voltar
-                    </a>
-                </div>
-            </form>
-        <?php else: ?>
-            <?php if ($ehMasterGlobal): ?>
-                <form method="get" class="toolbar">
-                    <input type="hidden" name="acao" value="listar">
-                    <label for="empresa_id">Empresa integradora:</label>
-                    <select name="empresa_id" id="empresa_id" class="sel" onchange="this.form.submit()">
-                        <option value="0">Selecione uma empresa</option>
-                        <?php foreach ($empresas as $empresa): ?>
-                            <option value="<?= (int) $empresa['id'] ?>" <?= $empresaIdSelecionada === (int) $empresa['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars((string) $empresa['nome'], ENT_QUOTES, 'UTF-8') ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </form>
-            <?php endif; ?>
-
-            <?php if ($ehMasterGlobal && $empresaIdSelecionada === 0): ?>
-                <p class="empty">Selecione uma empresa para visualizar os usuários.</p>
-            <?php else: ?>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nome</th>
-                                <th>E-mail</th>
-                                <th>Perfil</th>
-                                <th>Status cadastro</th>
-                                <th>Situação</th>
-                                <th>Último acesso</th>
-                                <th>Criação</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if ($usuarios === []): ?>
-                                <tr>
-                                    <td colspan="8">Nenhum usuário encontrado.</td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($usuarios as $usuario): ?>
-                                    <?php
-                                    $nomeExibicao = $usuario['nome'] ?: 'Cadastro pendente';
-                                    $ativoClasse = ((int) $usuario['ativo'] === 1) ? 'b-ativo' : 'b-inativo';
-                                    $ativoTexto = ((int) $usuario['ativo'] === 1) ? 'Ativo' : 'Inativo';
-                                    $cadClasse = ((string) $usuario['status_cadastro'] === 'concluido') ? 'b-concluido' : 'b-pendente';
-                                    $podeEditar = UsuarioPermissaoService::podeEditarUsuario($usuarioAutenticado, $usuario);
-                                    $podeReenviarConvite = UsuarioPermissaoService::podeReenviarConvite($usuarioAutenticado, $usuario);
-                                    ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars((string) $nomeExibicao, ENT_QUOTES, 'UTF-8') ?></td>
-                                        <td><?= htmlspecialchars((string) $usuario['email'], ENT_QUOTES, 'UTF-8') ?></td>
-                                        <td><?= htmlspecialchars((string) $usuario['perfil'], ENT_QUOTES, 'UTF-8') ?></td>
-                                        <td>
-                                            <span class="badge <?= $cadClasse ?>">
-                                                <?= htmlspecialchars((string) $usuario['status_cadastro'], ENT_QUOTES, 'UTF-8') ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge <?= $ativoClasse ?>">
-                                                <?= htmlspecialchars((string) $ativoTexto, ENT_QUOTES, 'UTF-8') ?>
-                                            </span>
-                                        </td>
-                                        <td><?= htmlspecialchars((string) ($usuario['ultimo_acesso'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></td>
-                                        <td><?= htmlspecialchars((string) ($usuario['created_at'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></td>
-                                        <td>
-                                            <div class="acoes">
-                                                <?php if ($podeEditar): ?>
-                                                    <a class="btn-sec" href="usuarios.php?acao=editar&usuario_id=<?= (int) $usuario['id'] ?><?= $empresaIdSelecionada > 0 ? '&empresa_id=' . $empresaIdSelecionada : '' ?>">
-                                                        Editar
-                                                    </a>
-                                                <?php endif; ?>
-
-                                                <?php if (((string) ($usuario['status_cadastro'] ?? '') === 'pendente') && $podeReenviarConvite): ?>
-                                                    <a class="btn-sec" href="usuarios.php?acao=reenviar_convite&usuario_id=<?= (int) $usuario['id'] ?><?= $empresaIdSelecionada > 0 ? '&empresa_id=' . $empresaIdSelecionada : '' ?>">
-                                                        Reenviar convite
-                                                    </a>
-                                                <?php endif; ?>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        <?php endif; ?>
-
-        <div class="footer">
-            CIP - Controlador de Injeção de Potência Elétrica
-        </div>
-    </section>
-</div>
+        // Fechar dropdown de empresa ao clicar fora
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.empresa-extra')) {
+                document.querySelectorAll('.empresa-extra.aberto').forEach(function(el) {
+                    el.classList.remove('aberto');
+                });
+            }
+        });
+    });
+    </script>
 </body>
 </html>

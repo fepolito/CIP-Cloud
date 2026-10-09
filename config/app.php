@@ -18,6 +18,9 @@ declare(strict_types=1);
 
 if (!function_exists('is_ambiente_dev')) {
     function is_ambiente_dev(): bool {
+        if (php_sapi_name() === 'cli' && PHP_OS_FAMILY === 'Windows') {
+            return true;
+        }
         $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
         
         if ($host === 'localhost') {

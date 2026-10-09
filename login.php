@@ -70,7 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     perfil,
                     papel_global,
                     empresa_id,
-                    ativo
+                    ativo,
+                    forcar_troca_senha
                 FROM usuarios
                 WHERE email = :email
                   AND deleted_at IS NULL
@@ -92,14 +93,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $erro = 'Credenciais inválidas.';
                 } else {
                     loginUser([
-                        'id'           => (int)    ($usuario['id']           ?? 0),
-                        'nome'         => (string) ($usuario['nome']         ?? ''),
-                        'email'        => (string) ($usuario['email']        ?? ''),
-                        'perfil'       => (string) ($usuario['perfil']       ?? ''),
-                        'papel_global' => $usuario['papel_global'] ?? null,        // 🆕
-                        'empresa_id'   => $usuario['empresa_id']   !== null         // 🆕
+                        'id'                 => (int)    ($usuario['id']                 ?? 0),
+                        'nome'               => (string) ($usuario['nome']               ?? ''),
+                        'email'              => (string) ($usuario['email']              ?? ''),
+                        'perfil'             => (string) ($usuario['perfil']             ?? ''),
+                        'papel_global'       => $usuario['papel_global'] ?? null,        // 🆕
+                        'empresa_id'         => $usuario['empresa_id']   !== null         // 🆕
                             ? (int) $usuario['empresa_id']
                             : null,
+                        'forcar_troca_senha' => (int)    ($usuario['forcar_troca_senha'] ?? 0),
                     ]);
 
                     header('Location: ' . asset('/dashboard.php')); // ← era appUrl()
