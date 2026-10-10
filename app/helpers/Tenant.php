@@ -2,7 +2,10 @@
 /**
  * Arquivo: app/helpers/Tenant.php
  * Projeto: Controlador de Injeção de Potência Elétrica
- * Objetivo: Helper de contexto multi-empresa (multi-tenant).
+ * Objetivo: Helper de contexto multi-empresa; agora com bypass para
+ *           administrador de empresa master_sistema (ex.: Aeonium) e agregação de
+ *           controladores via grant direto usuario_controlador_acesso (proprietários
+ *           residenciais sem vínculo em usuario_empresa).
  *
  * Regra de negócio:
  *   - Usuário com papel_global preenchido (master, master_operador)
@@ -12,6 +15,7 @@
  *   - Sessão inválida → filtro fail-safe "AND 1=0" (zero linhas).
  *
  * Histórico:
+ *   2026-10-10  v1.3.0  Adicionado bypass is_master_sistema + UNION usuario_controlador_acesso.
  *   2026-06-05  v1.2.1  Fix: listarControladores() corrigido para modelo
  *                       multi-tenant real (usuario->usuario_empresa->empresa
  *                       ->controladores). Removida ref a controlador_usuario
@@ -254,19 +258,17 @@ final class Tenant
      * @param  int|null $empresaId   Reservado para uso futuro
      * @return array
      *
-     * @versao 1.2.1
-     * @modificado_em 2026-06-05
+     * @versao 1.3.0
+     * @modificado_em 2026-10-10
      */
     public static function listarControladores(\PDO $pdo, ?int $empresaId = null): array
     {
-        // 🛡️ Fail-safe: sem sessão válida, retorna array vazio
         if (empty($_SESSION['usuario_id'] ?? null)) {
             return [];
         }
 
         $usuarioId = (int) $_SESSION['usuario_id'];
 
-        // Passo 1: Buscar o perfil do usuario ativo e nao deletado
         $stmtPerfil = $pdo->prepare("
             SELECT perfil
               FROM usuarios
@@ -279,81 +281,66 @@ final class Tenant
         $stmtPerfil->execute();
         $perfil = $stmtPerfil->fetchColumn();
 
-        // Usuario nao encontrado, inativo ou deletado -> fail-safe
         if ($perfil === false) {
             return [];
         }
 
-        // Passo 2: Decidir query com base no perfil
         $ehMaster = in_array($perfil, ['master', 'master_operador'], true);
 
-        if ($ehMaster) {
-            // 👑 QUERY_MASTER: ve todos os controladores nao-inativos
-            $sql = "
-                SELECT 
-                    c.id,
-                    c.codigo,
-                    c.apelido AS nome,
-                    c.tipo,
-                    c.local_instalacao,
-                    c.timezone,
-                    c.empresa_id,
-                    c.status,
-                    c.online,
-                    c.fw_version,
-                    c.last_seen_at,
-                    c.ultimo_contato,
-                    c.modo_controle,
-                    c.controle_exportacao_ativo,
-                    c.controle_versao,
-                    c.controle_atualizado_em,
-                    c.controle_origem,
-                    c.created_at
-                FROM controladores c
-                WHERE c.status <> 'inativo'
-                ORDER BY c.apelido ASC
-            ";
+        // Bypass para administrador vinculado a empresa master_sistema (ex.: Aeonium)
+        if (!$ehMaster && $perfil === 'administrador') {
+            $stmtMS = $pdo->prepare("
+                SELECT COUNT(*)
+                  FROM usuario_empresa ue
+                  INNER JOIN empresa e ON e.id = ue.empresa_id
+                    AND e.is_master_sistema = 1
+                    AND e.ativo = 1
+                    AND e.deleted_at IS NULL
+                 WHERE ue.usuario_id = :usuario_id
+                   AND ue.ativo = 1
+                   AND ue.deleted_at IS NULL
+            ");
+            $stmtMS->bindValue(':usuario_id', $usuarioId, \PDO::PARAM_INT);
+            $stmtMS->execute();
+            $ehMaster = ((int) $stmtMS->fetchColumn()) > 0;
+        }
 
+        $colunas = "
+            c.id, c.codigo, c.apelido AS nome, c.tipo, c.local_instalacao, c.timezone,
+            c.empresa_id, c.status, c.online, c.fw_version, c.last_seen_at,
+            c.ultimo_contato, c.modo_controle, c.controle_exportacao_ativo,
+            c.controle_versao, c.controle_atualizado_em, c.controle_origem, c.created_at
+        ";
+
+        if ($ehMaster) {
+            $sql = "SELECT $colunas FROM controladores c WHERE c.status <> 'inativo' ORDER BY c.apelido ASC";
             $stmt = $pdo->prepare($sql);
             $stmt->execute();
         } else {
-            // 👤 QUERY_TENANT: filtra via usuario_empresa -> empresa -> controladores
             $sql = "
-                SELECT 
-                    c.id,
-                    c.codigo,
-                    c.apelido AS nome,
-                    c.tipo,
-                    c.local_instalacao,
-                    c.timezone,
-                    c.empresa_id,
-                    c.status,
-                    c.online,
-                    c.fw_version,
-                    c.last_seen_at,
-                    c.ultimo_contato,
-                    c.modo_controle,
-                    c.controle_exportacao_ativo,
-                    c.controle_versao,
-                    c.controle_atualizado_em,
-                    c.controle_origem,
-                    c.created_at
-                FROM controladores c
-                INNER JOIN empresa e 
-                    ON e.id = c.empresa_id
-                    AND e.ativo = 1
-                    AND e.deleted_at IS NULL
-                INNER JOIN usuario_empresa ue 
-                    ON ue.empresa_id = e.id
-                    AND ue.ativo = 1
-                    AND ue.deleted_at IS NULL
-                WHERE ue.usuario_id = :usuario_id
-                  AND c.status <> 'inativo'
-                ORDER BY c.apelido ASC
-            ";
+                SELECT $colunas
+                  FROM controladores c
+                  INNER JOIN empresa e ON e.id = c.empresa_id
+                    AND e.ativo = 1 AND e.deleted_at IS NULL
+                  INNER JOIN usuario_empresa ue ON ue.empresa_id = e.id
+                    AND ue.ativo = 1 AND ue.deleted_at IS NULL
+                 WHERE ue.usuario_id = :usuario_id1
+                   AND c.status <> 'inativo'
 
+                UNION
+
+                SELECT $colunas
+                  FROM controladores c
+                  INNER JOIN usuario_controlador_acesso uca ON uca.controlador_id = c.id
+                    AND uca.ativo = 1 AND uca.deleted_at IS NULL
+                 WHERE uca.usuario_id = :usuario_id2
+                   AND c.status <> 'inativo'
+
+                ORDER BY nome ASC
+            ";
             $stmt = $pdo->prepare($sql);
-            $stmt->bindValue(':usuario_id', $usuarioId, \PDO::PARAM_INT);
+            $stmt->bindValue(':usuario_id1', $usuarioId, \PDO::PARAM_INT);
+            $stmt->bindValue(':usuario_id2', $usuarioId, \PDO::PARAM_INT);
             $stmt->execute();
         }
 

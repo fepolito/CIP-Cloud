@@ -1,24 +1,32 @@
 <?php
 /**
  * @arquivo       app/services/Solis/SolisIngestor.php
- * @versao        1.1.1
- * @modificado_em 2026-08-05
- * @objetivo      Coleta inverterList (paginado), faz upsert de inversores e
- *                INSERT-if-null em telemetria_5min_inversor/_string e telemetria_5min.
- *                Usa pac1/etoday1/etotal1 e separa delta (energia_geracao_kwh) do acumulado (energia_geracao_total_kwh).
+ * @versao        1.3.0
+ * @modificado_em 2026-10-07
+ * @objetivo      Coleta inverterList (paginado), faz upsert de inversores vinculando
+ *                empresa_id e controlador_id via solis_station_id, grava telemetria
+ *                segregada (telemetria_5min_inversor/_string) e delega a consolidação
+ *                de telemetria_5min ao TelemetriaConsolidador a partir de controlador_inversores.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
+
+require_once __DIR__ . '/../Shared/TelemetriaConsolidador.php';
+
+use App\Services\Shared\TelemetriaConsolidador;
 
 final class SolisIngestor
 {
     private PDO $pdo;
     private array $cfg;
+    private ?array $stationMap = null;
+    private TelemetriaConsolidador $consolidador;
 
-    public function __construct(PDO $pdo, array $cfg)
+    public function __construct(PDO $pdo, array $cfg, ?TelemetriaConsolidador $consolidador = null)
     {
-        $this->pdo = $pdo;
-        $this->cfg = $cfg;
+        $this->pdo          = $pdo;
+        $this->cfg          = $cfg;
+        $this->consolidador = $consolidador ?? new TelemetriaConsolidador($pdo);
     }
 
     /** Assinatura HMAC-SHA1 padrao SolisCloud. */
@@ -89,50 +97,45 @@ final class SolisIngestor
             $page++;
         } while ($page <= $pages);
 
-        // $stats['agregado'] = $this->aggregateToController($bucket);
-        $stats['agregado'] = 0;
+        $stats['agregado'] = $this->aggregateToController($bucket);
 
         return ['bucket_utc' => $bucket] + $stats;
     }
 
-    /** Agrega inversores por controlador → telemetria_5min (INSERT-if-null; ESP vence). */
+    /** Agrega inversores por controlador → telemetria_5min via TelemetriaConsolidador. */
     private function aggregateToController(string $bucket): int
     {
-        // Soma potencia/energia dos inversores vinculados a cada controlador.
+        // Soma potencia/energia dos inversores vinculados a controladores virtuais SOLIS-CLOUD
+        // usando controlador_inversores.status = 'ativo' como fonte única da verdade
         $sql = "
-          SELECT i.controlador_id AS ctrl,
+          SELECT ci.controlador_id AS ctrl,
                  SUM(t.potencia_ac_w)     AS pac_w,
                  SUM(t.energia_total_kwh) AS etot_kwh,
                  MAX(t.estado)            AS estado
             FROM telemetria_5min_inversor t
             JOIN inversores i ON i.id = t.inversor_id
+            JOIN controlador_inversores ci ON ci.inversor_ref_id = i.id AND ci.status = 'ativo'
+            JOIN controladores c ON c.id = ci.controlador_id
            WHERE t.timestamp_utc = :ts
-             AND i.controlador_id IS NOT NULL
-             AND i.ativo = 1
-           GROUP BY i.controlador_id";
+             AND c.tipo = 'SOLIS-CLOUD'
+           GROUP BY ci.controlador_id";
         $sel = $this->pdo->prepare($sql);
         $sel->execute([':ts' => $bucket]);
         $rows = $sel->fetchAll(PDO::FETCH_ASSOC);
 
-        $ins = $this->pdo->prepare("
-          INSERT INTO telemetria_5min
-            (controlador_id, timestamp_utc, potencia_geracao_w,
-             energia_geracao_kwh, energia_geracao_total_kwh, status_inversor, geracao_origem, qualidade_dado)
-          VALUES (:ctrl,:ts,:pac,:delta,:etot,:st,'api_externa',80)
-          ON DUPLICATE KEY UPDATE id=id"); // ESP (se ja gravou) vence
-
         $n = 0;
         foreach ($rows as $r) {
-            $etot = (float)$r['etot_kwh'];
-            $delta = $this->energiaGeracaoDelta((int)$r['ctrl'], $bucket, $etot);
-            
-            $ins->execute([
-                ':ctrl'  => (int)$r['ctrl'],
-                ':ts'    => $bucket,
-                ':pac'   => (float)$r['pac_w'],
-                ':delta' => $delta,
-                ':etot'  => $etot,
-                ':st'    => (string)($r['estado'] ?? ''),
+            $ctrlId = (int)$r['ctrl'];
+            $pacW   = (float)$r['pac_w'];
+            $etot   = (float)$r['etot_kwh'];
+            $delta  = $this->energiaGeracaoDelta($ctrlId, $bucket, $etot);
+
+            // Grava contribuição da marca Solis e consolida em telemetria_5min
+            $this->consolidador->gravarContribuicaoMarca($ctrlId, $bucket, 'SOLIS', $pacW, $delta);
+            $this->consolidador->consolidar($ctrlId, $bucket, [
+                'energia_geracao_total_kwh' => $etot,
+                'status_inversor'           => (string)($r['estado'] ?? ''),
+                'qualidade_dado'            => 80,
             ]);
             $n++;
         }
@@ -163,13 +166,51 @@ final class SolisIngestor
         return ($delta >= 0 && $delta < 1000) ? round($delta, 4) : 0.0;  // teto anti-rollover
     }
 
+    /**
+     * Resolve empresa_id e controlador_id a partir do station_id retornado pela API.
+     */
+    private function resolverControladorEEmpresa(string $stationId): array
+    {
+        if ($this->stationMap === null) {
+            $this->stationMap = [];
+            $stmt = $this->pdo->query("
+                SELECT id, empresa_id, solis_station_id
+                FROM controladores
+                WHERE solis_station_id IS NOT NULL AND solis_station_id != ''
+            ");
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $this->stationMap[(string)$row['solis_station_id']] = [
+                    'ctrl_id'    => (int)$row['id'],
+                    'empresa_id' => (int)$row['empresa_id'],
+                ];
+            }
+        }
+
+        if ($stationId !== '' && isset($this->stationMap[$stationId])) {
+            return [
+                'ctrl_id'    => $this->stationMap[$stationId]['ctrl_id'],
+                'empresa_id' => $this->stationMap[$stationId]['empresa_id'],
+            ];
+        }
+
+        return [
+            'ctrl_id'    => null,
+            'empresa_id' => (int)$this->cfg['empresa_id'],
+        ];
+    }
+
     private function upsertInversor(array $r): int
     {
+        $stationId = (string)($r['stationId'] ?? '');
+        $vinculo   = $this->resolverControladorEEmpresa($stationId);
+
         $sql = "INSERT INTO inversores
-                 (empresa_id, solis_sn, solis_inverter_id, collector_sn,
+                 (empresa_id, controlador_id, solis_sn, solis_inverter_id, collector_sn,
                   station_name, station_id, modelo, potencia_nominal_w, num_mppt)
-                VALUES (:emp,:sn,:iid,:col,:st,:sid,:mac,:pw,:mppt)
+                VALUES (:emp,:ctrl,:sn,:iid,:col,:st,:sid,:mac,:pw,:mppt)
                 ON DUPLICATE KEY UPDATE
+                  empresa_id=VALUES(empresa_id),
+                  controlador_id=COALESCE(VALUES(controlador_id), controlador_id),
                   solis_inverter_id=VALUES(solis_inverter_id),
                   collector_sn=VALUES(collector_sn),
                   station_name=VALUES(station_name),
@@ -179,15 +220,16 @@ final class SolisIngestor
                   id=LAST_INSERT_ID(id)";
         $st = $this->pdo->prepare($sql);
         $st->execute([
-            ':emp' => $this->cfg['empresa_id'],
-            ':sn'  => (string)($r['inverterSn'] ?? $r['sn']),
-            ':iid' => (string)($r['inverterId'] ?? ''),
-            ':col' => (string)($r['collectorSn'] ?? ''),
-            ':st'  => (string)($r['stationName'] ?? ''),
-            ':sid' => (string)($r['stationId'] ?? ''),
-            ':mac' => (string)($r['machine'] ?? ''),
-            ':pw'  => isset($r['power1']) ? (float)$r['power1'] : null,
-            ':mppt'=> isset($r['dcInputTypeMppt']) ? (int)$r['dcInputTypeMppt'] : null,
+            ':emp'  => $vinculo['empresa_id'],
+            ':ctrl' => $vinculo['ctrl_id'],
+            ':sn'   => (string)($r['inverterSn'] ?? $r['sn']),
+            ':iid'  => (string)($r['inverterId'] ?? ''),
+            ':col'  => (string)($r['collectorSn'] ?? ''),
+            ':st'   => (string)($r['stationName'] ?? ''),
+            ':sid'  => $stationId,
+            ':mac'  => (string)($r['machine'] ?? ''),
+            ':pw'   => isset($r['power1']) ? (float)$r['power1'] : null,
+            ':mppt' => isset($r['dcInputTypeMppt']) ? (int)$r['dcInputTypeMppt'] : null,
         ]);
         return (int)$this->pdo->lastInsertId();
     }
