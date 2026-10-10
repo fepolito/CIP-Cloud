@@ -106,39 +106,6 @@ try {
     $fimUtc    = $dtFim->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     
     $sqlMedia = "
-        WITH dias_fechados AS (
-          SELECT 
-            DATE_FORMAT(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str), '%Y-%m') AS mes_ref,
-            MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_dia,
-            MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_dia,
-            COALESCE(MAX(energia_geracao_kwh), 0)   AS geracao_dia,
-            (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
-            COALESCE(MAX(energia_geracao_kwh), 0) -
-            (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia,
-            -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
-            COUNT(energia_geracao_kwh) AS amostras_geracao,
-            COUNT(*) AS amostras_total
-            -- >>> FIM TEMP-COBERTURA-SOLIS <<<
-          FROM telemetria_5min
-          WHERE controlador_id = :cid
-            AND timestamp_utc >= :inicio_utc
-            AND timestamp_utc <  :fim_utc
-          GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str)), mes_ref
-        ),
-        meses_fechados AS (
-          SELECT 
-            mes_ref,
-            SUM(importada_dia) AS importada_kwh,
-            SUM(exportada_dia) AS exportada_kwh,
-            SUM(geracao_dia)   AS geracao_kwh,
-            SUM(consumo_dia)   AS consumo_kwh,
-            -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
-            SUM(amostras_geracao) AS amostras_geracao,
-            SUM(amostras_total) AS amostras_total
-            -- >>> FIM TEMP-COBERTURA-SOLIS <<<
-          FROM dias_fechados
-          GROUP BY mes_ref
-        )
         SELECT
           COUNT(*) AS meses_computados,
           COALESCE(AVG(importada_kwh), 0) AS media_importada_kwh,
@@ -151,7 +118,38 @@ try {
             1
           ) AS cobertura_geracao_pct
           -- >>> FIM TEMP-COBERTURA-SOLIS <<<
-        FROM meses_fechados;
+        FROM (
+          SELECT 
+            mes_ref,
+            SUM(importada_dia) AS importada_kwh,
+            SUM(exportada_dia) AS exportada_kwh,
+            SUM(geracao_dia)   AS geracao_kwh,
+            SUM(consumo_dia)   AS consumo_kwh,
+            -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+            SUM(amostras_geracao) AS amostras_geracao,
+            SUM(amostras_total) AS amostras_total
+            -- >>> FIM TEMP-COBERTURA-SOLIS <<<
+          FROM (
+            SELECT 
+              DATE_FORMAT(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str), '%Y-%m') AS mes_ref,
+              MAX(energia_importada_kwh) - MIN(energia_importada_kwh) AS importada_dia,
+              MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh) AS exportada_dia,
+              COALESCE(MAX(energia_geracao_kwh), 0)   AS geracao_dia,
+              (MAX(energia_importada_kwh) - MIN(energia_importada_kwh)) +
+              COALESCE(MAX(energia_geracao_kwh), 0) -
+              (MAX(energia_exportada_kwh) - MIN(energia_exportada_kwh)) AS consumo_dia,
+              -- >>> TEMP-COBERTURA-SOLIS (remover quando SolisCloud API estiver ativa) <<<
+              COUNT(energia_geracao_kwh) AS amostras_geracao,
+              COUNT(*) AS amostras_total
+              -- >>> FIM TEMP-COBERTURA-SOLIS <<<
+            FROM telemetria_5min
+            WHERE controlador_id = :cid
+              AND timestamp_utc >= :inicio_utc
+              AND timestamp_utc <  :fim_utc
+            GROUP BY DATE(CONVERT_TZ(timestamp_utc, 'UTC', :tz_str)), mes_ref
+          ) dias_fechados
+          GROUP BY mes_ref
+        ) meses_fechados;
     ";
     
     $stmtMedia = $pdo->prepare($sqlMedia);

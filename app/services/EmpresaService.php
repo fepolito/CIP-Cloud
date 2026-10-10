@@ -3,13 +3,13 @@
  * ============================================================
  * Arquivo   : app/services/EmpresaService.php
  * Projeto   : CIP — Controlador de Injeção de Potência Elétrica
- * Versão    : 1.0.0
- * Modificado: 2026-09-14
+ * Versão    : 1.1.0
+ * Modificado: 2026-10-10
  * Objetivo  : Resolver escopo hierárquico de empresas por perfil e calcular
- *             rollup de geração (dia/mês) somando a subárvore via CTE recursiva.
+ *             rollup de geração (dia/mês) somando a subárvore.
  *
  * Dependências de hardware:
- *   - Servidor com MySQL 8.0+ / MariaDB 10.2+
+ *   - Servidor com MySQL 5.7+ / MariaDB 10.2+
  *
  * Dependências de software/arquivos:
  *   - PHP 8.3+ (PSR-12, strict_types)
@@ -21,6 +21,8 @@
  * Histórico de implementações:
  *   2026-09-14  v1.0.0  Criação inicial da classe EmpresaService
  *                        com escopo multinível e rollup de geração (CIP-DEC-20260914-003)
+ *   2026-10-10  v1.1.0  Compatibilidade com MySQL 5.7 (HostGator): subarvoreIds()
+ *                        reescrito com resolução hierárquica em memória (elimina CTE WITH RECURSIVE).
  * ============================================================
  */
 
@@ -59,7 +61,8 @@ final class EmpresaService
 
     /**
      * Retorna o ID da raiz mais todos os IDs descendentes da subárvore (rollup).
-     * Utiliza CTE recursiva compatível com MySQL 8.0+ e MariaDB 10.2+.
+     * Compatível com MySQL 5.7 (HostGator) e MySQL 8.0+.
+     * Resolve a árvore hierárquica em memória com proteção contra ciclos.
      *
      * @param int      $raizId
      * @param PDO|null $pdo     Instância PDO opcional (se nulo, obtém de Database::getConnection())
@@ -68,21 +71,41 @@ final class EmpresaService
     public static function subarvoreIds(int $raizId, ?PDO $pdo = null): array
     {
         $db = $pdo ?? Database::getConnection();
-        $sql = '
-            WITH RECURSIVE arvore AS (
-                SELECT id FROM empresa WHERE id = :raiz AND deleted_at IS NULL
-                UNION ALL
-                SELECT e.id
-                FROM empresa e
-                INNER JOIN arvore a ON e.empresa_pai_id = a.id
-                WHERE e.deleted_at IS NULL
-            )
-            SELECT id FROM arvore
-        ';
-        $stmt = $db->prepare($sql);
-        $stmt->bindValue(':raiz', $raizId, PDO::PARAM_INT);
-        $stmt->execute();
-        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        $stmt = $db->query('SELECT id, empresa_pai_id FROM empresa WHERE deleted_at IS NULL');
+
+        $filhosPorPai = [];
+        $idsExistentes = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $id = (int) $row['id'];
+            $pai = $row['empresa_pai_id'] !== null ? (int) $row['empresa_pai_id'] : null;
+            $idsExistentes[$id] = true;
+            if ($pai !== null) {
+                $filhosPorPai[$pai][] = $id;
+            }
+        }
+
+        if (!isset($idsExistentes[$raizId])) {
+            return [];
+        }
+
+        $resultado = [];
+        $fila = [$raizId];
+        $visitados = [$raizId => true];
+
+        while (!empty($fila)) {
+            $atual = array_shift($fila);
+            $resultado[] = $atual;
+            if (isset($filhosPorPai[$atual])) {
+                foreach ($filhosPorPai[$atual] as $filhoId) {
+                    if (!isset($visitados[$filhoId])) {
+                        $visitados[$filhoId] = true;
+                        $fila[] = $filhoId;
+                    }
+                }
+            }
+        }
+
+        return $resultado;
     }
 
     /**
