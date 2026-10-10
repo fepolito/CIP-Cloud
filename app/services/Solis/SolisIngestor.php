@@ -114,10 +114,12 @@ final class SolisIngestor
                  MAX(t.estado)            AS estado
             FROM telemetria_5min_inversor t
             JOIN inversores i ON i.id = t.inversor_id
-            JOIN controlador_inversores ci ON ci.inversor_ref_id = i.id AND ci.status = 'ativo'
+            JOIN controlador_inversores ci ON (ci.inversor_ref_id = i.id OR ci.inversor_sn = i.solis_sn)
+             AND ci.marca = 'SOLIS'
+             AND ci.status = 'ativo'
             JOIN controladores c ON c.id = ci.controlador_id
            WHERE t.timestamp_utc = :ts
-             AND c.tipo = 'SOLIS-CLOUD'
+             AND c.status <> 'inativo'
            GROUP BY ci.controlador_id";
         $sel = $this->pdo->prepare($sql);
         $sel->execute([':ts' => $bucket]);
@@ -137,6 +139,17 @@ final class SolisIngestor
                 'status_inversor'           => (string)($r['estado'] ?? ''),
                 'qualidade_dado'            => 80,
             ]);
+
+            // Atualiza status online para controladores virtuais SOLIS-CLOUD
+            $upCtrl = $this->pdo->prepare("
+                UPDATE controladores
+                   SET last_telemetry_at = UTC_TIMESTAMP(),
+                       last_seen_at = UTC_TIMESTAMP(),
+                       online = 1
+                 WHERE id = :id AND tipo = 'SOLIS-CLOUD'
+            ");
+            $upCtrl->execute([':id' => $ctrlId]);
+
             $n++;
         }
         return $n;
