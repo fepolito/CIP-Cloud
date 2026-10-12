@@ -73,8 +73,18 @@ function listaDias(string $inicio, string $fim): array
     return $dias;
 }
 
+function logMsg(string $msg): void
+{
+    echo $msg . "\n";
+    $logDir = __DIR__ . '/../../storage/logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0770, true);
+    }
+    @file_put_contents($logDir . '/backfill.log', date('Y-m-d H:i:s') . ' ' . $msg . "\n", FILE_APPEND);
+}
+
 $dias = listaDias($inicio, $fim);
-echo "Backfill de {$inicio} a {$fim} ({$marca}) — " . count($dias) . " dias.\n";
+logMsg("Backfill de {$inicio} a {$fim} ({$marca}) — " . count($dias) . " dias.");
 
 // ===================== SOLIS =====================
 if ($marca === 'solis' || $marca === 'todas') {
@@ -83,7 +93,7 @@ if ($marca === 'solis' || $marca === 'todas') {
         : new \SolisIngestor($pdo, $cfgSolis);
 
     $inversores = $solis->listarInversoresParaBackfill();
-    echo "[SOLIS] " . count($inversores) . " inversores encontrados.\n";
+    logMsg("[SOLIS] " . count($inversores) . " inversores encontrados.");
 
     foreach ($dias as $dia) {
         foreach ($inversores as $inv) {
@@ -94,10 +104,10 @@ if ($marca === 'solis' || $marca === 'todas') {
             try {
                 $qtd = $solis->backfillDia($inv, $dia);
                 marcarCheckpoint($pdo, 'solis', $ref, $dia, 'ok', "{$qtd} buckets");
-                echo "[SOLIS] {$dia} inv={$ref}: {$qtd} buckets OK\n";
+                logMsg("[SOLIS] {$dia} inv={$ref}: {$qtd} buckets OK");
             } catch (Throwable $e) {
                 marcarCheckpoint($pdo, 'solis', $ref, $dia, 'erro', $e->getMessage());
-                echo "[SOLIS] {$dia} inv={$ref}: ERRO {$e->getMessage()}\n";
+                logMsg("[SOLIS] {$dia} inv={$ref}: ERRO {$e->getMessage()}");
             }
             usleep(300000);
         }
@@ -109,7 +119,7 @@ if ($marca === 'foxess' || $marca === 'todas') {
     $client = new FoxEssClient($cfgFoxEss);
     $fox = new FoxEssIngestor($pdo, $client);
     $grupos = $fox->listarGruposParaBackfill();
-    echo "[FOXESS] " . count($grupos) . " grupos (controladores) encontrados.\n";
+    logMsg("[FOXESS] " . count($grupos) . " grupos (controladores) encontrados.");
 
     foreach ($dias as $dia) {
         foreach ($grupos as $grupo) {
@@ -117,7 +127,7 @@ if ($marca === 'foxess' || $marca === 'todas') {
                 // Monta array equipamento compativel com backfillDiaEquipamento
                 $eq = ['sn' => $sn, 'vinculo_id' => $grupo['vinculo_id_por_sn'][$sn] ?? null];
                 if ($eq['vinculo_id'] === null) {
-                    echo "[FOXESS] AVISO: vinculo_id nao resolvido para SN={$sn}, pulando.\n";
+                    logMsg("[FOXESS] AVISO: vinculo_id nao resolvido para SN={$sn}, pulando.");
                     continue;
                 }
 
@@ -128,22 +138,23 @@ if ($marca === 'foxess' || $marca === 'todas') {
                 try {
                     $qtd = $fox->backfillDiaEquipamento($grupo, $eq, $dia);
                     marcarCheckpoint($pdo, 'foxess', $ref, $dia, 'ok', "{$qtd} buckets");
-                    echo "[FOXESS] {$dia} sn={$ref}: {$qtd} buckets OK\n";
+                    logMsg("[FOXESS] {$dia} sn={$ref}: {$qtd} buckets OK");
                 } catch (Throwable $e) {
                     marcarCheckpoint($pdo, 'foxess', $ref, $dia, 'erro', $e->getMessage());
-                    echo "[FOXESS] {$dia} sn={$ref}: ERRO {$e->getMessage()}\n";
+                    logMsg("[FOXESS] {$dia} sn={$ref}: ERRO {$e->getMessage()}");
                 }
                 usleep(300000);
             }
 
             try {
                 $fox->consolidarDiaGrupo($grupo, $dia);
-                echo "[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: consolidado.\n";
+                logMsg("[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: consolidado.");
             } catch (Throwable $e) {
-                echo "[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: ERRO ao consolidar: {$e->getMessage()}\n";
+                logMsg("[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: ERRO ao consolidar: {$e->getMessage()}");
             }
         }
     }
 }
 
-echo "Backfill concluido.\n";
+logMsg("Backfill concluido.");
+
