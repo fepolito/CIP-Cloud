@@ -1,12 +1,12 @@
 <?php
 /**
  * @arquivo       app/services/FoxEss/FoxEssIngestor.php
- * @versao        3.1.0
+ * @versao        3.2.0
  * @modificado_em 2026-10-12
- * @objetivo      Idem v3.0.0, adicionado retry (2 tentativas, sleep 4s) para o
- *                bucket mais recente da janela quando algum equipamento do grupo
- *                nao reportou dado (upload atrasado na nuvem FoxESS), evitando
- *                soma parcial sem necessidade de sobrepor janelas entre execucoes.
+ * @objetivo      Coleta telemetria da API FoxESS via historyQuery (janela de 15min,
+ *                3 buckets de 5min) com retry no bucket recente e calculo dinamico
+ *                de qualidade_dado. Inclui metodos publicos de backfill historico
+ *                por dia fixo (24h por chamada, variaveis otimizadas).
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
@@ -110,11 +110,13 @@ final class FoxEssIngestor
             $id = (int) $r['controlador_id'];
             if (!isset($grupos[$id])) {
                 $grupos[$id] = [
-                    'controlador_id' => $id,
-                    'codigo'         => $r['codigo'],
-                    'empresa_id'     => (int) $r['empresa_id'],
-                    'timezone'       => $r['timezone'],
-                    'equipamentos'   => [],
+                    'controlador_id'    => $id,
+                    'codigo'            => $r['codigo'],
+                    'empresa_id'        => (int) $r['empresa_id'],
+                    'timezone'          => $r['timezone'],
+                    'equipamentos'      => [],
+                    'sns'               => [],
+                    'vinculo_id_por_sn' => [],
                 ];
             }
             $grupos[$id]['equipamentos'][] = [
@@ -122,9 +124,12 @@ final class FoxEssIngestor
                 'sn'         => $r['inversor_sn'],
                 'tipo'       => $r['tipo_equipamento'],
             ];
+            $grupos[$id]['sns'][] = $r['inversor_sn'];
+            $grupos[$id]['vinculo_id_por_sn'][$r['inversor_sn']] = (int) $r['vinculo_id'];
         }
 
         return array_values($grupos);
+
     }
 
     /**
@@ -606,4 +611,174 @@ final class FoxEssIngestor
             // Nao deixa falha de log quebrar o ciclo.
         }
     }
+
+    private const VARIAVEIS_BACKFILL = [
+        'pvPower', 'generationPower', 'loadsPower', 'feedinPower',
+        'gridConsumptionPower', 'todayYield', 'generation', 'PVEnergyTotal',
+        'invTemperation', 'runningState',
+    ];
+
+    /**
+     * Expoe os grupos (controlador + equipamentos) ja montados por
+     * buscarControladoresFox(), para uso pelo script de backfill.
+     */
+    public function listarGruposParaBackfill(): array
+    {
+        return $this->buscarControladoresFox();
+    }
+
+    /**
+     * Backfill de um dia inteiro (24h, no timezone do controlador) para um
+     * unico equipamento (SN). Grava em telemetria_equipamento_5min.
+     *
+     * @return int Quantidade de buckets de 5min gravados/atualizados.
+     */
+    public function backfillDiaEquipamento(array $grupo, array $eq, string $dia): int
+    {
+        $tz = $grupo['timezone'] ?? 'America/Sao_Paulo';
+        $inicioLocal = new DateTimeImmutable($dia . ' 00:00:00', new DateTimeZone($tz));
+        $fimLocal    = new DateTimeImmutable($dia . ' 23:59:59', new DateTimeZone($tz));
+
+        $beginMs = (int) $inicioLocal->getTimestamp() * 1000;
+        $endMs   = (int) $fimLocal->getTimestamp() * 1000;
+
+        $datasRaw = $this->client->historyQuery(
+            (string) $eq['sn'],
+            $beginMs,
+            $endMs,
+            self::VARIAVEIS_BACKFILL
+        );
+
+        if ($datasRaw === null) {
+            return 0;
+        }
+
+        $pontosPorBucket = $this->pivotarPorBucket($datasRaw);
+
+        $stmtEq = $this->pdo->prepare(
+            "INSERT INTO telemetria_equipamento_5min
+                (controlador_inversor_id, timestamp_utc, potencia_geracao_w, potencia_consumo_w,
+                 potencia_exportada_w, potencia_importada_w, energia_hoje_kwh, energia_total_kwh,
+                 energia_delta_kwh, temperatura_c, status_equipamento, qualidade_dado)
+             VALUES (:vid,:ts,:ger,:cons,:exp,:imp,:ehoje,:etot,:edelta,:temp,:status, 100)
+             ON DUPLICATE KEY UPDATE
+                potencia_geracao_w   = VALUES(potencia_geracao_w),
+                potencia_consumo_w   = VALUES(potencia_consumo_w),
+                potencia_exportada_w = VALUES(potencia_exportada_w),
+                potencia_importada_w = VALUES(potencia_importada_w),
+                energia_hoje_kwh     = VALUES(energia_hoje_kwh),
+                energia_total_kwh    = VALUES(energia_total_kwh),
+                energia_delta_kwh    = VALUES(energia_delta_kwh),
+                temperatura_c        = VALUES(temperatura_c),
+                status_equipamento   = VALUES(status_equipamento),
+                qualidade_dado       = VALUES(qualidade_dado)"
+        );
+
+
+        $ultimoHoje = null;
+        $ultimoTotal = null;
+        $qtdGravados = 0;
+
+        // Ordena buckets cronologicamente para que o delta sequencial seja coerente.
+        $bucketsOrdenados = array_keys($pontosPorBucket);
+        sort($bucketsOrdenados);
+
+        foreach ($bucketsOrdenados as $bucket) {
+            $vars = $pontosPorBucket[$bucket];
+
+            $pvW     = ((float) ($vars['pvPower'] ?? $vars['generationPower'] ?? 0)) * 1000;
+            $loadsW  = ((float) ($vars['loadsPower'] ?? 0)) * 1000;
+            $feedinW = ((float) ($vars['feedinPower'] ?? 0)) * 1000;
+            $gridW   = ((float) ($vars['gridConsumptionPower'] ?? 0)) * 1000;
+            $todayYield = isset($vars['todayYield']) && is_numeric($vars['todayYield']) ? (float) $vars['todayYield'] : null;
+            $generationTotal = isset($vars['generation']) && is_numeric($vars['generation'])
+                ? (float) $vars['generation']
+                : (isset($vars['PVEnergyTotal']) && is_numeric($vars['PVEnergyTotal']) ? (float) $vars['PVEnergyTotal'] : null);
+            $temperaturaC = isset($vars['invTemperation']) && is_numeric($vars['invTemperation']) ? (float) $vars['invTemperation'] : null;
+            $statusEq = isset($vars['runningState']) ? (string) $vars['runningState'] : null;
+
+            $deltaInfo = $this->calcularDeltaEquipamentoSequencial(
+                (int) $eq['vinculo_id'], $bucket, $todayYield, $generationTotal,
+                $tz, $ultimoHoje, $ultimoTotal
+            );
+            $deltaKwh = $deltaInfo['delta_hoje_kwh'];
+            $ultimoHoje = $todayYield;
+            $ultimoTotal = $generationTotal;
+
+            $stmtEq->execute([
+                'vid' => (int) $eq['vinculo_id'], 'ts' => $bucket,
+                'ger' => $pvW, 'cons' => $loadsW, 'exp' => $feedinW, 'imp' => $gridW,
+                'ehoje' => $todayYield, 'etot' => $generationTotal, 'edelta' => $deltaKwh,
+                'temp' => $temperaturaC, 'status' => $statusEq,
+            ]);
+            $qtdGravados++;
+        }
+
+        return $qtdGravados;
+    }
+
+    /**
+     * Consolida telemetria_5min (soma dos equipamentos) para todos os buckets
+     * de um dia inteiro, para um grupo (controlador).
+     */
+    public function consolidarDiaGrupo(array $grupo, string $dia): void
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT teq.timestamp_utc,
+                    SUM(teq.potencia_geracao_w)    AS soma_ger,
+                    SUM(teq.potencia_consumo_w)    AS soma_carga,
+                    SUM(teq.potencia_exportada_w)  AS soma_exp,
+                    SUM(teq.potencia_importada_w)  AS soma_imp,
+                    SUM(teq.energia_total_kwh)     AS soma_total,
+                    COUNT(DISTINCT ci.inversor_sn) AS qtd_equip
+               FROM telemetria_equipamento_5min teq
+               JOIN controlador_inversores ci ON ci.id = teq.controlador_inversor_id
+              WHERE ci.controlador_id = :cid
+                AND teq.timestamp_utc BETWEEN :inicio AND :fim
+              GROUP BY teq.timestamp_utc
+              ORDER BY teq.timestamp_utc"
+        );
+        $stmt->execute([
+            'cid' => $grupo['controlador_id'],
+            'inicio' => $dia . ' 00:00:00',
+            'fim' => $dia . ' 23:59:59',
+        ]);
+        $linhas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $totalEquip = count($grupo['equipamentos'] ?? $grupo['sns'] ?? []);
+
+        $stmtUp = $this->pdo->prepare(
+            "INSERT INTO telemetria_5min
+                (controlador_id, timestamp_utc, potencia_importada_w, potencia_exportada_w,
+                 potencia_geracao_w, potencia_consumo_total_w, is_exporting, direction_valid,
+                 power_injected_w, energia_geracao_total_kwh, geracao_origem, qualidade_dado)
+             VALUES
+                (:cid,:ts,:imp,:exp,:ger,:cons,:isexp,1,:inj,:etot,'api_externa',:qual)
+             ON DUPLICATE KEY UPDATE
+                potencia_importada_w      = VALUES(potencia_importada_w),
+                potencia_exportada_w      = VALUES(potencia_exportada_w),
+                potencia_geracao_w        = VALUES(potencia_geracao_w),
+                potencia_consumo_total_w  = VALUES(potencia_consumo_total_w),
+                is_exporting              = VALUES(is_exporting),
+                power_injected_w          = VALUES(power_injected_w),
+                energia_geracao_total_kwh = VALUES(energia_geracao_total_kwh),
+                qualidade_dado            = VALUES(qualidade_dado)"
+        );
+
+
+        foreach ($linhas as $l) {
+            $qualidade = $totalEquip > 0 ? (int) round(100 * ((int) $l['qtd_equip']) / $totalEquip) : 100;
+            $isExporting = ((float) $l['soma_exp']) > 0;
+
+            $stmtUp->execute([
+                'cid' => $grupo['controlador_id'],
+                'ts' => $l['timestamp_utc'],
+                'imp' => $l['soma_imp'], 'exp' => $l['soma_exp'],
+                'ger' => $l['soma_ger'], 'cons' => $l['soma_carga'],
+                'isexp' => $isExporting ? 1 : 0, 'inj' => $l['soma_exp'],
+                'etot' => $l['soma_total'], 'qual' => $qualidade,
+            ]);
+        }
+    }
 }
+

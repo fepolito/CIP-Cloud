@@ -364,7 +364,11 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
 ## CIP-DEC-20261012-003 — Ingestors Solis/FoxESS migrados de "ponto único" para "janela de 15min via histórico"
 - **Contexto:** Com a unificação do cron para intervalo de 15 minutos (limitação do host compartilhado), a ingestão de ponto único gerava lacunas temporais de 10 minutos (2 em cada 3 buckets de 5min sem dados).
 - **Decisão:** Migrar ambos os Ingestors (`SolisIngestor.php` v1.4.0 e `FoxEssIngestor.php` v3.1.0) para consultar o histórico da janela de 15 minutos (`inverterDay` no Solis e `historyQuery` no FoxESS), processando e gravando sequencialmente os 3 buckets de 5min por ciclo sem sobreposição entre execuções. No FoxESS v3.1.0, mitigação de soma parcial no bucket da ponta via retry em memória (2 tentativas, sleep 4s) e cálculo dinâmico de `qualidade_dado` (proporção de equipamentos do grupo que responderam naquele bucket). Conversão estrita de todos os timestamps para UTC real (epoch ms no Solis e offset explícito `BRT-0300` no FoxESS via regex + `DateTimeImmutable`).
-- **Status:** 🟡 Proposta (aguardando novo teste)
+- **Status:** 🟢 Confirmada
 
-
-
+## CIP-DEC-20261012-004 — Backfill Histórico CLI com Checkpointing Idempotente (Solis v1.5.0 + FoxEss v3.2.0)
+- **Contexto:** Necessidade de recuperar e consolidar lacunas históricas de telemetria dos últimos 30 dias para todas as marcas (Solis e FoxESS) com segurança, sem sobrecarga ou concorrência com o cron de produção.
+- **Decisão:** Criação de `api/sync/backfill_historico.php` executável exclusivamente via CLI (`PHP_SAPI === 'cli'`), suportando flags `--inicio`, `--fim` e `--marca` (`solis|foxess|todas`). Adicionados métodos públicos de backfill por dia em `SolisIngestor.php` (`listarInversoresParaBackfill`, `backfillDia`) e `FoxEssIngestor.php` (`listarGruposParaBackfill`, `backfillDiaEquipamento`, `consolidarDiaGrupo`).
+- **Idempotência e Resiliência:** Criação da tabela `backfill_checkpoint` (compatível com MySQL 5.7). Cada inversor/SN concluído é registrado com `status='ok'`. Em caso de interrupção ou reexecução, dias/equipamentos já processados são ignorados instantaneamente. Updates utilizam `ON DUPLICATE KEY UPDATE` com sintaxe `VALUES(col)` para evitar duplicatas e preservar integridade.
+- **Impacto:** `SolisIngestor.php` v1.5.0, `FoxEssIngestor.php` v3.2.0 e `api/sync/backfill_historico.php` v1.0.0.
+- **Status:** 🟢 Confirmada

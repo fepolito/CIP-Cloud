@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       app/services/Solis/SolisIngestor.php
- * @versao        1.4.0
+ * @versao        1.5.0
  * @modificado_em 2026-10-12
  * @objetivo      Coleta inverterList (paginado) para descoberta/upsert de inversores,
  *                depois busca inverterDay por inversor para capturar a janela dos
@@ -9,6 +9,7 @@
  *                15min do hosting compartilhado. Grava telemetria segregada
  *                (telemetria_5min_inversor/_string) e delega a consolidacao de
  *                telemetria_5min ao TelemetriaConsolidador por bucket.
+ *                Inclui metodos publicos de backfill historico por dia fixo.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
@@ -336,7 +337,11 @@ final class SolisIngestor
                  (inversor_id, timestamp_utc, potencia_ac_w,
                   energia_hoje_kwh, energia_total_kwh, estado, fonte)
                 VALUES (:inv,:ts,:pac,:et,:etot,:est,'solis')
-                ON DUPLICATE KEY UPDATE id=id";
+                ON DUPLICATE KEY UPDATE
+                  potencia_ac_w     = VALUES(potencia_ac_w),
+                  energia_hoje_kwh  = VALUES(energia_hoje_kwh),
+                  energia_total_kwh = VALUES(energia_total_kwh),
+                  estado            = VALUES(estado)";
         $st = $this->pdo->prepare($sql);
         $st->execute([
             ':inv'  => $invId,
@@ -354,7 +359,7 @@ final class SolisIngestor
         $sql = "INSERT INTO telemetria_5min_string
                  (inversor_id, timestamp_utc, string_num, potencia_w, fonte)
                 VALUES (:inv,:ts,:num,:pw,'solis')
-                ON DUPLICATE KEY UPDATE id=id";
+                ON DUPLICATE KEY UPDATE potencia_w = VALUES(potencia_w)";
         $st = $this->pdo->prepare($sql);
         $n = 0;
         for ($i = 1; $i <= 32; $i++) {
@@ -367,4 +372,108 @@ final class SolisIngestor
         }
         return $n;
     }
+
+    /**
+     * Lista todos os inversores acessiveis (pagina inverterList uma unica vez),
+     * para uso pelo script de backfill.
+     *
+     * @return array<int,array{inverterId:string, local_id:int, sn:string, stationId:string, controlador_id:?int}>
+     */
+    public function listarInversoresParaBackfill(): array
+    {
+        $pageNo = 1;
+        $pageSize = (int) ($this->cfg['page_size'] ?? 100);
+        $resultado = [];
+
+        do {
+            $data = $this->request('/v1/api/inverterList', [
+                'pageNo'   => $pageNo,
+                'pageSize' => $pageSize,
+            ]);
+            $records = $data['page']['records'] ?? [];
+            $pages   = (int) ($data['page']['pages'] ?? 1);
+
+            foreach ($records as $r) {
+                $stationId     = (string) ($r['stationId'] ?? '');
+                $vinculo       = $this->resolverControladorEEmpresa($stationId);
+                $localInvId    = $this->upsertInversor($r);
+
+                $resultado[] = [
+                    'inverterId'     => (string) ($r['inverterId'] ?? $r['id'] ?? ''),
+                    'local_id'       => $localInvId,
+                    'sn'             => (string) ($r['inverterSn'] ?? $r['sn'] ?? ''),
+                    'stationId'      => $stationId,
+                    'controlador_id' => $vinculo['ctrl_id'],
+                ];
+            }
+
+            $pageNo++;
+        } while ($pageNo <= $pages);
+
+        return $resultado;
+    }
+
+    /**
+     * Backfill de um dia inteiro para um inversor especifico (processa todos
+     * os pontos retornados pela API inverterDay para a data solicitada).
+     *
+     * @return int Quantidade de buckets de 5min gravados/atualizados.
+     */
+    public function backfillDia(array $inv, string $dia): int
+    {
+        $invId = (string)($inv['inverterId'] ?? '');
+        if ($invId === '') {
+            return 0;
+        }
+
+        $localInvId = (int)($inv['local_id'] ?? 0);
+        if ($localInvId === 0) {
+            $st = $this->pdo->prepare("SELECT id FROM inversores WHERE solis_inverter_id = :iid LIMIT 1");
+            $st->execute([':iid' => $invId]);
+            $localInvId = (int) $st->fetchColumn();
+            if ($localInvId === 0) {
+                return 0;
+            }
+        }
+
+        $data = $this->request('/v1/api/inverterDay', [
+            'id'       => $invId,
+            'sn'       => (string)($inv['sn'] ?? ''),
+            'money'    => 'BRL',
+            'time'     => $dia,
+            'timeZone' => (int)($this->cfg['timezone_offset'] ?? -3),
+        ]);
+
+        if (empty($data) || !is_array($data)) {
+            return 0;
+        }
+
+        // Agrupa pontos por bucket de 5min UTC
+        $pontosPorBucket = [];
+        foreach ($data as $p) {
+            $tsMs = (int)($p['dataTimestamp'] ?? 0);
+            if ($tsMs === 0) continue;
+            $tsSec = intdiv($tsMs, 1000);
+            $bucketSec = $tsSec - ($tsSec % 300);
+            $bucket = gmdate('Y-m-d H:i:s', $bucketSec);
+            $pontosPorBucket[$bucket] = $p;
+        }
+
+        ksort($pontosPorBucket);
+
+        $qtdGravados = 0;
+        foreach ($pontosPorBucket as $bucket => $ponto) {
+            $this->insertTelemetria($localInvId, $bucket, $ponto);
+            $this->insertStrings($localInvId, $bucket, $ponto);
+            $qtdGravados++;
+        }
+
+        // Reagrega os controladores para cada bucket afetado desse dia
+        foreach (array_keys($pontosPorBucket) as $bucket) {
+            $this->aggregateToController($bucket);
+        }
+
+        return $qtdGravados;
+    }
 }
+
