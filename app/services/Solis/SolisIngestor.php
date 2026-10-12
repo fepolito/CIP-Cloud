@@ -468,12 +468,36 @@ final class SolisIngestor
             $qtdGravados++;
         }
 
-        // Reagrega os controladores para cada bucket afetado desse dia
-        foreach (array_keys($pontosPorBucket) as $bucket) {
-            $this->aggregateToController($bucket);
-        }
-
         return $qtdGravados;
+    }
+
+    /**
+     * Consolida todos os controladores Solis para os buckets de um dia inteiro.
+     * Executado uma unica vez por dia apos processar todos os inversores.
+     *
+     * @return int Quantidade de buckets consolidados em telemetria_5min.
+     */
+    public function consolidarDiaControladores(string $dia): int
+    {
+        $st = $this->pdo->prepare("
+            SELECT DISTINCT t.timestamp_utc
+              FROM telemetria_5min_inversor t
+              JOIN inversores i ON i.id = t.inversor_id
+              JOIN controlador_inversores ci ON (ci.inversor_ref_id = i.id OR ci.inversor_sn = i.solis_sn)
+               AND ci.marca = 'SOLIS'
+               AND ci.status = 'ativo'
+             WHERE t.timestamp_utc BETWEEN :ini AND :fim
+             ORDER BY t.timestamp_utc ASC
+        ");
+        $st->execute([':ini' => $dia . ' 00:00:00', ':fim' => $dia . ' 23:59:59']);
+        $buckets = $st->fetchAll(PDO::FETCH_COLUMN);
+
+        $totalConsolidados = 0;
+        foreach ($buckets as $b) {
+            $this->aggregateToController((string)$b);
+            $totalConsolidados++;
+        }
+        return $totalConsolidados;
     }
 }
 

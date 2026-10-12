@@ -1,12 +1,13 @@
 <?php
 /**
  * @arquivo       api/sync/backfill_historico.php
- * @versao        1.0.0
+ * @versao        1.1.0
  * @modificado_em 2026-10-12
  * @objetivo      Backfill historico de telemetria (Solis + FoxESS), dia a dia,
  *                reaproveitando a logica de bucket/consolidacao dos Ingestors
- *                de tempo real. Rodavel apenas via CLI, com checkpoint para
- *                retomada em caso de interrupcao. Nao e endpoint web.
+ *                de tempo real. Suporta execucao continua via CLI e paginacao
+ *                automatica com auto-refresh via Web para prevenir Timeout 503.
+ *                Garante criacao da tabela de checkpoint e seed das estacoes.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
@@ -18,14 +19,14 @@ $cfgFoxEss = require __DIR__ . '/../../config/foxess.php';
 
 // Auth: CLI e liberado; HTTP exige token valido (ex: ?token=aeonium123)
 if (!$isCli) {
-    header('Content-Type: text/plain; charset=utf-8');
+    header('Content-Type: text/html; charset=utf-8');
     $token = $_GET['token'] ?? '';
     $cronToken = $cfgSolis['cron_token'] ?? 'aeonium123';
     if (!hash_equals((string)$cronToken, (string)$token)) {
         http_response_code(403);
-        exit("Acesso negado: informe token valido (?token=...) ou execute via CLI.\n");
+        exit("Acesso negado: informe token valido (?token=...) ou execute via CLI.<br>\n");
     }
-    @set_time_limit(0);
+    @set_time_limit(180);
     @ignore_user_abort(true);
 }
 
@@ -56,6 +57,28 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS backfill_checkpoint (
     UNIQUE KEY uq_marca_ref_data (marca, referencia, data_processada)
 ) ENGINE=InnoDB");
 
+function logMsg(string $msg, bool $isCli = true): void
+{
+    $logDir = __DIR__ . '/../../storage/logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0770, true);
+    }
+    $line = date('Y-m-d H:i:s') . ' ' . $msg . "\n";
+    @file_put_contents($logDir . '/backfill.log', $line, FILE_APPEND);
+
+    if ($isCli) {
+        echo $msg . "\n";
+    } else {
+        echo htmlspecialchars($msg) . "<br>\n";
+        @ob_flush();
+        @flush();
+    }
+}
+
+require_once __DIR__ . '/../../app/services/Solis/SolisSeed.php';
+\App\Services\Solis\SolisSeed::executarSeNecessario($pdo, function (string $msg) use ($isCli): void {
+    logMsg($msg, $isCli);
+});
 
 function jaProcessado(PDO $pdo, string $marca, string $ref, string $data): bool
 {
@@ -84,30 +107,79 @@ function listaDias(string $inicio, string $fim): array
     return $dias;
 }
 
-function logMsg(string $msg): void
-{
-    echo $msg . "\n";
-    $logDir = __DIR__ . '/../../storage/logs';
-    if (!is_dir($logDir)) {
-        @mkdir($logDir, 0770, true);
+$todosDias = listaDias($inicio, $fim);
+
+// Instancia Ingestors
+$solis = ($marca === 'solis' || $marca === 'todas')
+    ? (class_exists('\App\Services\Solis\SolisIngestor')
+        ? new \App\Services\Solis\SolisIngestor($pdo, $cfgSolis)
+        : new \SolisIngestor($pdo, $cfgSolis))
+    : null;
+$inversoresSolis = $solis ? $solis->listarInversoresParaBackfill() : [];
+
+$clientFox = ($marca === 'foxess' || $marca === 'todas') ? new FoxEssClient($cfgFoxEss) : null;
+$fox = $clientFox ? new FoxEssIngestor($pdo, $clientFox) : null;
+$gruposFox = $fox ? $fox->listarGruposParaBackfill() : [];
+
+// Determina quais dias precisam rodar
+$diasParaProcessar = [];
+if (!$isCli) {
+    // Via Web: busca apenas o PRIMEIRO dia pendente para nao estourar timeout 503
+    foreach ($todosDias as $d) {
+        $temPendente = false;
+        if ($solis) {
+            foreach ($inversoresSolis as $inv) {
+                $ref = (string)($inv['inverterId'] ?? $inv['sn']);
+                if (!jaProcessado($pdo, 'solis', $ref, $d)) {
+                    $temPendente = true;
+                    break;
+                }
+            }
+        }
+        if (!$temPendente && $fox) {
+            foreach ($gruposFox as $g) {
+                foreach ($g['sns'] as $sn) {
+                    if (!jaProcessado($pdo, 'foxess', (string)$sn, $d)) {
+                        $temPendente = true;
+                        break 2;
+                    }
+                }
+            }
+        }
+        if ($temPendente) {
+            $diasParaProcessar = [$d];
+            break;
+        }
     }
-    @file_put_contents($logDir . '/backfill.log', date('Y-m-d H:i:s') . ' ' . $msg . "\n", FILE_APPEND);
+} else {
+    // Via CLI: roda todos os dias sequencialmente
+    $diasParaProcessar = $todosDias;
 }
 
-$dias = listaDias($inicio, $fim);
-logMsg("Backfill de {$inicio} a {$fim} ({$marca}) — " . count($dias) . " dias.");
+if (!$isCli) {
+    echo "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Backfill Historico</title>";
+    echo "<style>body{font-family:monospace;background:#0d1117;color:#c9d1d9;padding:20px;line-height:1.5}</style>";
+    echo "</head><body>";
+    echo "<h2>Backfill de Telemetria — CIP Cloud</h2>";
+}
+
+if (empty($diasParaProcessar)) {
+    logMsg("🎉 PARABENS! Todos os dias de {$inicio} a {$fim} ja estao 100% concluidos no banco de dados!", $isCli);
+    if (!$isCli) {
+        echo "<p style='color:#3fb950;'>Todos os dados historicos estao gravados. Voce ja pode consultar o painel Energia!</p>";
+        echo "</body></html>";
+    }
+    exit;
+}
+
+$diaAtualProcessado = $diasParaProcessar[0];
+logMsg("Executando backfill do dia {$diaAtualProcessado} ({$marca})...", $isCli);
 
 // ===================== SOLIS =====================
-if ($marca === 'solis' || $marca === 'todas') {
-    $solis = class_exists('\App\Services\Solis\SolisIngestor')
-        ? new \App\Services\Solis\SolisIngestor($pdo, $cfgSolis)
-        : new \SolisIngestor($pdo, $cfgSolis);
-
-    $inversores = $solis->listarInversoresParaBackfill();
-    logMsg("[SOLIS] " . count($inversores) . " inversores encontrados.");
-
-    foreach ($dias as $dia) {
-        foreach ($inversores as $inv) {
+if ($solis) {
+    foreach ($diasParaProcessar as $dia) {
+        $qtdOk = 0;
+        foreach ($inversoresSolis as $inv) {
             $ref = (string)($inv['inverterId'] ?? $inv['sn']);
             if (jaProcessado($pdo, 'solis', $ref, $dia)) {
                 continue;
@@ -115,57 +187,66 @@ if ($marca === 'solis' || $marca === 'todas') {
             try {
                 $qtd = $solis->backfillDia($inv, $dia);
                 marcarCheckpoint($pdo, 'solis', $ref, $dia, 'ok', "{$qtd} buckets");
-                logMsg("[SOLIS] {$dia} inv={$ref}: {$qtd} buckets OK");
+                logMsg("[SOLIS] {$dia} inv={$ref}: {$qtd} buckets OK", $isCli);
+                $qtdOk++;
             } catch (Throwable $e) {
                 marcarCheckpoint($pdo, 'solis', $ref, $dia, 'erro', $e->getMessage());
-                logMsg("[SOLIS] {$dia} inv={$ref}: ERRO {$e->getMessage()}");
+                logMsg("[SOLIS] {$dia} inv={$ref}: ERRO {$e->getMessage()}", $isCli);
             }
-            usleep(300000);
+            usleep(100000); // 0.1s
+        }
+
+        // Consolida controladores Solis para o dia inteiro
+        try {
+            $qtdCons = $solis->consolidarDiaControladores($dia);
+            logMsg("[SOLIS] {$dia}: {$qtdCons} buckets consolidados em telemetria_5min.", $isCli);
+        } catch (Throwable $e) {
+            logMsg("[SOLIS] {$dia}: ERRO consolidacao controladores: {$e->getMessage()}", $isCli);
         }
     }
 }
 
 // ===================== FOXESS =====================
-if ($marca === 'foxess' || $marca === 'todas') {
-    $client = new FoxEssClient($cfgFoxEss);
-    $fox = new FoxEssIngestor($pdo, $client);
-    $grupos = $fox->listarGruposParaBackfill();
-    logMsg("[FOXESS] " . count($grupos) . " grupos (controladores) encontrados.");
-
-    foreach ($dias as $dia) {
-        foreach ($grupos as $grupo) {
+if ($fox) {
+    foreach ($diasParaProcessar as $dia) {
+        foreach ($gruposFox as $grupo) {
             foreach ($grupo['sns'] as $sn) {
-                // Monta array equipamento compativel com backfillDiaEquipamento
                 $eq = ['sn' => $sn, 'vinculo_id' => $grupo['vinculo_id_por_sn'][$sn] ?? null];
                 if ($eq['vinculo_id'] === null) {
-                    logMsg("[FOXESS] AVISO: vinculo_id nao resolvido para SN={$sn}, pulando.");
                     continue;
                 }
 
-                $ref = $sn;
+                $ref = (string)$sn;
                 if (jaProcessado($pdo, 'foxess', $ref, $dia)) {
                     continue;
                 }
                 try {
                     $qtd = $fox->backfillDiaEquipamento($grupo, $eq, $dia);
                     marcarCheckpoint($pdo, 'foxess', $ref, $dia, 'ok', "{$qtd} buckets");
-                    logMsg("[FOXESS] {$dia} sn={$ref}: {$qtd} buckets OK");
+                    logMsg("[FOXESS] {$dia} sn={$ref}: {$qtd} buckets OK", $isCli);
                 } catch (Throwable $e) {
                     marcarCheckpoint($pdo, 'foxess', $ref, $dia, 'erro', $e->getMessage());
-                    logMsg("[FOXESS] {$dia} sn={$ref}: ERRO {$e->getMessage()}");
+                    logMsg("[FOXESS] {$dia} sn={$ref}: ERRO {$e->getMessage()}", $isCli);
                 }
-                usleep(300000);
+                usleep(100000);
             }
 
             try {
                 $fox->consolidarDiaGrupo($grupo, $dia);
-                logMsg("[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: consolidado.");
+                logMsg("[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: consolidado.", $isCli);
             } catch (Throwable $e) {
-                logMsg("[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: ERRO ao consolidar: {$e->getMessage()}");
+                logMsg("[FOXESS] {$dia} ctrl={$grupo['controlador_id']}: ERRO ao consolidar: {$e->getMessage()}", $isCli);
             }
         }
     }
 }
 
-logMsg("Backfill concluido.");
+logMsg("Dia {$diaAtualProcessado} concluido com sucesso!", $isCli);
 
+// Se for WEB, recarrega automaticamente a pagina para fazer o proximo dia sem timeout
+if (!$isCli) {
+    $urlAtual = $_SERVER['REQUEST_URI'];
+    echo "<hr><p style='color:#58a6ff;'>⏳ Dia {$diaAtualProcessado} gravado! Avancando para o proximo dia automaticamente em 2 segundos...</p>";
+    echo "<script>setTimeout(function(){ window.location.reload(); }, 2000);</script>";
+    echo "</body></html>";
+}
