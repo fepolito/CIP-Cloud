@@ -361,3 +361,10 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
 - **Owner:** Fernando
 - **Status:** 🟢 Confirmada
 
+## CIP-DEC-20261012-003 — Ingestors Solis/FoxESS migrados de "ponto único" para "janela de 15min via histórico"
+- **Contexto:** Com a unificação do cron para intervalo de 15 minutos (limitação do host compartilhado), a ingestão de ponto único gerava lacunas temporais de 10 minutos (2 em cada 3 buckets de 5min sem dados).
+- **Decisão:** Migrar ambos os Ingestors (`SolisIngestor.php` v1.4.0 e `FoxEssIngestor.php` v3.1.0) para consultar o histórico da janela de 15 minutos (`inverterDay` no Solis e `historyQuery` no FoxESS), processando e gravando sequencialmente os 3 buckets de 5min por ciclo sem sobreposição entre execuções. No FoxESS v3.1.0, mitigação de soma parcial no bucket da ponta via retry em memória (2 tentativas, sleep 4s) e cálculo dinâmico de `qualidade_dado` (proporção de equipamentos do grupo que responderam naquele bucket). Conversão estrita de todos os timestamps para UTC real (epoch ms no Solis e offset explícito `BRT-0300` no FoxESS via regex + `DateTimeImmutable`).
+- **Status:** 🟡 Proposta (aguardando novo teste)
+
+
+

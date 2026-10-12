@@ -1,12 +1,14 @@
 <?php
 /**
  * @arquivo       app/services/Solis/SolisIngestor.php
- * @versao        1.3.0
- * @modificado_em 2026-10-07
- * @objetivo      Coleta inverterList (paginado), faz upsert de inversores vinculando
- *                empresa_id e controlador_id via solis_station_id, grava telemetria
- *                segregada (telemetria_5min_inversor/_string) e delega a consolidação
- *                de telemetria_5min ao TelemetriaConsolidador a partir de controlador_inversores.
+ * @versao        1.4.0
+ * @modificado_em 2026-10-12
+ * @objetivo      Coleta inverterList (paginado) para descoberta/upsert de inversores,
+ *                depois busca inverterDay por inversor para capturar a janela dos
+ *                ultimos 15min (3 buckets de 5min), compensando o limite de cron de
+ *                15min do hosting compartilhado. Grava telemetria segregada
+ *                (telemetria_5min_inversor/_string) e delega a consolidacao de
+ *                telemetria_5min ao TelemetriaConsolidador por bucket.
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 declare(strict_types=1);
@@ -51,7 +53,7 @@ final class SolisIngestor
                 "Date: {$date}",
                 "Authorization: {$auth}",
             ],
-            CURLOPT_SSL_VERIFYPEER => false // Added to ensure it works properly locally
+            CURLOPT_SSL_VERIFYPEER => false
         ]);
         $resp = curl_exec($ch);
         if ($resp === false) {
@@ -65,20 +67,40 @@ final class SolisIngestor
         return $data['data'] ?? [];
     }
 
-    /** Bucket 5min UTC defasado. */
-    private function bucketUtc(): string
+    /**
+     * Gera os buckets de 5min (UTC) cobrindo a janela dos ultimos N minutos.
+     * Substitui o antigo bucketUtc() (ponto unico) para compensar o limite de
+     * cron de 15min do hosting compartilhado: cada execucao agora recupera
+     * os 3 buckets de 5min do ciclo, nao apenas o instante atual.
+     *
+     * @return array<int,string> buckets em ordem cronologica (mais antigo -> mais recente)
+     */
+    private function janelaBuckets(): array
     {
-        $t = time() - ($this->cfg['bucket_lag_min'] * 60);
-        $t -= $t % 300; // trava em multiplo de 5min
-        return gmdate('Y-m-d H:i:s', $t);
+        $janelaMin = (int)($this->cfg['janela_min'] ?? 15);
+        $lagMin    = (int)($this->cfg['bucket_lag_min'] ?? 0);
+
+        $fim = time() - ($lagMin * 60);
+        $fim -= $fim % 300; // ultimo bucket fechado
+
+        $buckets = [];
+        $qtdBuckets = (int) ceil($janelaMin / 5);
+        for ($i = $qtdBuckets - 1; $i >= 0; $i--) {
+            $buckets[] = gmdate('Y-m-d H:i:s', $fim - ($i * 300));
+        }
+        return $buckets;
     }
 
-    /** Executa a coleta completa (todas as paginas). */
+    /** Executa a coleta completa (todas as paginas + janela de historico). */
     public function run(): array
     {
-        $bucket = $this->bucketUtc();
+        $buckets = $this->janelaBuckets();
+        $tsMin   = strtotime($buckets[0]  . ' UTC');
+        $tsMax   = strtotime(end($buckets) . ' UTC') + 299; // fecha o ultimo bucket
+
         $page   = 1;
-        $stats  = ['inversores' => 0, 'telemetria' => 0, 'strings' => 0];
+        $stats  = ['inversores' => 0, 'telemetria' => 0, 'strings' => 0, 'buckets' => count($buckets)];
+        $ctrlAfetados = [];
 
         do {
             $data = $this->request('/v1/api/inverterList', [
@@ -90,23 +112,81 @@ final class SolisIngestor
             foreach ($records as $r) {
                 $invId = $this->upsertInversor($r);
                 $stats['inversores']++;
-                $this->insertTelemetria($invId, $bucket, $r);
-                $stats['telemetria']++;
-                $stats['strings'] += $this->insertStrings($invId, $bucket, $r);
+
+                $pontos = $this->buscarHistoricoDoDia($r, $tsMin, $tsMax);
+                foreach ($pontos as $bucket => $ponto) {
+                    $this->insertTelemetria($invId, $bucket, $ponto);
+                    $stats['telemetria']++;
+                    $stats['strings'] += $this->insertStrings($invId, $bucket, $ponto);
+                }
             }
             $page++;
         } while ($page <= $pages);
 
-        $stats['agregado'] = $this->aggregateToController($bucket);
+        // Consolida cada bucket da janela sequencialmente (ordem cronologica
+        // importa para o calculo correto do delta de energia).
+        $stats['agregado'] = 0;
+        foreach ($buckets as $bucket) {
+            $stats['agregado'] += $this->aggregateToController($bucket);
+        }
 
-        return ['bucket_utc' => $bucket] + $stats;
+        return ['buckets_utc' => $buckets] + $stats;
     }
 
-    /** Agrega inversores por controlador → telemetria_5min via TelemetriaConsolidador. */
+    /**
+     * Busca /v1/api/inverterDay do inversor e filtra apenas os pontos cujo
+     * dataTimestamp (epoch ms, UTC real) cai dentro da janela [tsMin, tsMax].
+     * Retorna indexado por bucket UTC (Y-m-d H:i:s), 1 ponto por bucket
+     * (o mais recente dentro de cada bucket, em caso de multiplas amostras).
+     *
+     * @return array<string, array> bucket_utc => ponto bruto da API
+     */
+    private function buscarHistoricoDoDia(array $r, int $tsMin, int $tsMax): array
+    {
+        $invId = (string)($r['inverterId'] ?? '');
+        if ($invId === '') {
+            return [];
+        }
+
+        try {
+            // 'time' da inverterDay e a data LOCAL do inversor; usamos a data
+            // UTC do fim da janela convertida (seguro o suficiente pois a API
+            // retorna o dia completo e filtramos por dataTimestamp real a seguir).
+            $diaRef = gmdate('Y-m-d', $tsMax);
+            $data = $this->request('/v1/api/inverterDay', [
+                'id'       => $invId,
+                'money'    => 'BRL',
+                'time'     => $diaRef,
+                'timeZone' => (int)($this->cfg['timezone_offset'] ?? -3),
+            ]);
+        } catch (Throwable $e) {
+            @error_log('[solis_ingestor] inverterDay falhou para inverterId=' . $invId . ': ' . $e->getMessage());
+            return [];
+        }
+
+        $pontos = [];
+        foreach ($data as $p) {
+            $tsMs = (int)($p['dataTimestamp'] ?? 0);
+            if ($tsMs === 0) {
+                continue;
+            }
+            $tsSec = intdiv($tsMs, 1000); // epoch ms -> epoch s, sempre UTC real
+            if ($tsSec < $tsMin || $tsSec > $tsMax) {
+                continue;
+            }
+            $bucketSec = $tsSec - ($tsSec % 300);
+            $bucket = gmdate('Y-m-d H:i:s', $bucketSec);
+            // Mantem o ponto mais recente dentro do bucket (ordem da API e cronologica).
+            $pontos[$bucket] = $p;
+        }
+
+        ksort($pontos);
+        return $pontos;
+    }
+
+    /** Agrega inversores por controlador -> telemetria_5min via TelemetriaConsolidador. */
     private function aggregateToController(string $bucket): int
     {
-        // Soma potencia/energia dos inversores vinculados a controladores virtuais SOLIS-CLOUD
-        // usando controlador_inversores.status = 'ativo' como fonte única da verdade
         $sql = "
           SELECT ci.controlador_id AS ctrl,
                  SUM(t.potencia_ac_w)     AS pac_w,
@@ -132,7 +212,6 @@ final class SolisIngestor
             $etot   = (float)$r['etot_kwh'];
             $delta  = $this->energiaGeracaoDelta($ctrlId, $bucket, $etot);
 
-            // Grava contribuição da marca Solis e consolida em telemetria_5min
             $this->consolidador->gravarContribuicaoMarca($ctrlId, $bucket, 'SOLIS', $pacW, $delta);
             $this->consolidador->consolidar($ctrlId, $bucket, [
                 'energia_geracao_total_kwh' => $etot,
@@ -140,7 +219,6 @@ final class SolisIngestor
                 'qualidade_dado'            => 80,
             ]);
 
-            // Atualiza status online para controladores virtuais SOLIS-CLOUD
             $upCtrl = $this->pdo->prepare("
                 UPDATE controladores
                    SET last_telemetry_at = UTC_TIMESTAMP(),
@@ -156,8 +234,11 @@ final class SolisIngestor
     }
 
     /**
-     * Calcula o delta de geracao (kWh) para o controlador subtraindo
-     * o valor atual da energia_geracao_total_kwh (Solis) com o ultimo bucket conhecido.
+     * Calcula o delta de geracao (kWh), comparando com o ultimo bucket
+     * conhecido no banco ANTES do bucket atual. Como aggregateToController()
+     * agora roda sequencialmente por bucket (ordem cronologica) dentro do
+     * mesmo run(), o bucket N+1 naturalmente ja encontra o bucket N gravado
+     * no banco (telemetria_5min), preservando a continuidade do delta.
      */
     private function energiaGeracaoDelta(int $ctrl, string $bucket, float $etotalSoma): float
     {
@@ -172,16 +253,13 @@ final class SolisIngestor
         $lastEtotal = $st->fetchColumn();
 
         if ($lastEtotal === false) {
-            return 0.0;                     // 1o bucket -> 0.0 (era null)
+            return 0.0;
         }
 
         $delta = $etotalSoma - (float)$lastEtotal;
-        return ($delta >= 0 && $delta < 1000) ? round($delta, 4) : 0.0;  // teto anti-rollover
+        return ($delta >= 0 && $delta < 1000) ? round($delta, 4) : 0.0;
     }
 
-    /**
-     * Resolve empresa_id e controlador_id a partir do station_id retornado pela API.
-     */
     private function resolverControladorEEmpresa(string $stationId): array
     {
         if ($this->stationMap === null) {
@@ -247,27 +325,31 @@ final class SolisIngestor
         return (int)$this->pdo->lastInsertId();
     }
 
-    /** INSERT-if-null: so grava se ESP nao ocupou o bucket. */
-    private function insertTelemetria(int $invId, string $bucket, array $r): void
+    /**
+     * INSERT-if-null: so grava se o bucket ainda nao foi ocupado.
+     * Campos renomeados em relacao a inverterList: pac/eToday/eTotal/state
+     * (inverterDay) em vez de pac1/etoday1/etotal1/state (inverterList).
+     */
+    private function insertTelemetria(int $invId, string $bucket, array $p): void
     {
         $sql = "INSERT INTO telemetria_5min_inversor
                  (inversor_id, timestamp_utc, potencia_ac_w,
                   energia_hoje_kwh, energia_total_kwh, estado, fonte)
                 VALUES (:inv,:ts,:pac,:et,:etot,:est,'solis')
-                ON DUPLICATE KEY UPDATE id=id"; // nunca sobrescreve
+                ON DUPLICATE KEY UPDATE id=id";
         $st = $this->pdo->prepare($sql);
         $st->execute([
             ':inv'  => $invId,
             ':ts'   => $bucket,
-            ':pac'  => isset($r['pac1'])    ? (float)$r['pac1']    : null, // W
-            ':et'   => isset($r['etoday1']) ? (float)$r['etoday1'] : null, // kWh
-            ':etot' => isset($r['etotal1']) ? (float)$r['etotal1'] : null, // kWh
-            ':est'  => isset($r['state'])   ? (int)$r['state']     : null,
+            ':pac'  => isset($p['pac'])    ? (float)$p['pac']    : null, // W
+            ':et'   => isset($p['eToday']) ? (float)$p['eToday'] : null, // kWh
+            ':etot' => isset($p['eTotal']) ? (float)$p['eTotal'] : null, // kWh
+            ':est'  => isset($p['state'])  ? (int)$p['state']    : null,
         ]);
     }
 
-    /** Grava apenas strings com potencia > 0 (pow1..pow32). */
-    private function insertStrings(int $invId, string $bucket, array $r): int
+    /** Grava apenas strings com potencia > 0 (uPvN/iPvN -> calcula pw = u*i). */
+    private function insertStrings(int $invId, string $bucket, array $p): int
     {
         $sql = "INSERT INTO telemetria_5min_string
                  (inversor_id, timestamp_utc, string_num, potencia_w, fonte)
@@ -276,9 +358,11 @@ final class SolisIngestor
         $st = $this->pdo->prepare($sql);
         $n = 0;
         for ($i = 1; $i <= 32; $i++) {
-            $v = $r["pow{$i}"] ?? 0;
-            if ((float)$v <= 0) continue;
-            $st->execute([':inv'=>$invId, ':ts'=>$bucket, ':num'=>$i, ':pw'=>(float)$v]);
+            $u = (float)($p["uPv{$i}"] ?? 0);
+            $c = (float)($p["iPv{$i}"] ?? 0);
+            $pw = $u * $c;
+            if ($pw <= 0) continue;
+            $st->execute([':inv'=>$invId, ':ts'=>$bucket, ':num'=>$i, ':pw'=>$pw]);
             $n++;
         }
         return $n;

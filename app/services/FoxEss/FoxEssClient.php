@@ -1,18 +1,13 @@
 <?php
 /**
- * ============================================================
- * Arquivo   : app/services/FoxEss/FoxEssClient.php
- * Projeto   : CIP — Controlador de Injeção de Potência Elétrica
- * Versão    : 1.0.0
- * Modificado: 2026-10-06
- * Objetivo  : Cliente HTTP da FoxESS Cloud OpenAPI v0 com assinatura MD5
- *
- * Dependências de software/arquivos:
- *   - PHP 8.3+ (ext-curl, ext-json)
- *
- * Histórico de implementações:
- *   2026-10-06  v1.0.0  Criação inicial do client HTTP FoxESS OpenAPI
- * ============================================================
+ * @arquivo       app/services/FoxEss/FoxEssClient.php
+ * @versao        1.1.0
+ * @modificado_em 2026-10-12
+ * @objetivo      Cliente HTTP da FoxESS Cloud OpenAPI v0 com assinatura MD5.
+ *                Inclui historyQuery() (producao) para captura de janela de
+ *                historico de 15min, compensando limite de cron de 15min
+ *                do hosting compartilhado.
+ * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 
 declare(strict_types=1);
@@ -148,4 +143,43 @@ final class FoxEssClient
             return null;
         }
     }
+
+    /**
+     * Consulta histórico de variáveis para um SN em uma janela de tempo.
+     * Endpoint pode ignorar begin/end em alguns casos (bug conhecido da API FoxESS);
+     * o chamador DEVE filtrar os pontos retornados pelo timestamp real.
+     *
+     * @param string        $sn        Número de série do dispositivo
+     * @param int           $beginMs   Timestamp inicial em milissegundos (UTC)
+     * @param int           $endMs     Timestamp final em milissegundos (UTC)
+     * @param array<string> $variables Variáveis desejadas ([] = todas disponíveis)
+     * @return array<int, array{time:string, value:mixed, variable:string}>|null
+     */
+    public function historyQuery(string $sn, int $beginMs, int $endMs, array $variables = []): ?array
+    {
+        try {
+            $resp = $this->post('/op/v0/device/history/query', [
+                'sn'        => $sn,
+                'begin'     => $beginMs,
+                'end'       => $endMs,
+                'variables' => $variables,
+            ]);
+
+            $itens = $resp['result'] ?? [];
+            if (empty($itens) || !is_array($itens)) {
+                return null;
+            }
+
+            $datas = $itens[0]['datas'] ?? [];
+            if (empty($datas) || !is_array($datas)) {
+                return null;
+            }
+
+            return $datas; // retorno crudo p/ inspecao no teste
+        } catch (\Throwable $e) {
+            @error_log("[FoxEssClient] Falha em historyQuery para SN {$sn}: " . $e->getMessage());
+            return null;
+        }
+    }
 }
+
