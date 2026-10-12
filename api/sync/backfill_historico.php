@@ -11,14 +11,25 @@
  */
 declare(strict_types=1);
 
-if (PHP_SAPI !== 'cli') {
-    http_response_code(403);
-    exit('Acesso negado: script exclusivo CLI.');
+$isCli = (PHP_SAPI === 'cli');
+
+$cfgSolis  = require __DIR__ . '/../../config/solis.php';
+$cfgFoxEss = require __DIR__ . '/../../config/foxess.php';
+
+// Auth: CLI e liberado; HTTP exige token valido (ex: ?token=aeonium123)
+if (!$isCli) {
+    header('Content-Type: text/plain; charset=utf-8');
+    $token = $_GET['token'] ?? '';
+    $cronToken = $cfgSolis['cron_token'] ?? 'aeonium123';
+    if (!hash_equals((string)$cronToken, (string)$token)) {
+        http_response_code(403);
+        exit("Acesso negado: informe token valido (?token=...) ou execute via CLI.\n");
+    }
+    @set_time_limit(0);
+    @ignore_user_abort(true);
 }
 
 require_once __DIR__ . '/../../config/database.php';
-$cfgSolis  = require __DIR__ . '/../../config/solis.php';
-$cfgFoxEss = require __DIR__ . '/../../config/foxess.php';
 require_once __DIR__ . '/../../app/services/Solis/SolisClient.php';
 require_once __DIR__ . '/../../app/services/Solis/SolisIngestor.php';
 require_once __DIR__ . '/../../app/services/FoxEss/FoxEssClient.php';
@@ -27,10 +38,10 @@ require_once __DIR__ . '/../../app/services/FoxEss/FoxEssIngestor.php';
 use App\Services\FoxEss\FoxEssClient;
 use App\Services\FoxEss\FoxEssIngestor;
 
-$opts = getopt('', ['inicio:', 'fim:', 'marca:']);
-$inicio = $opts['inicio'] ?? gmdate('Y-m-d', time() - 30 * 86400);
-$fim    = $opts['fim']    ?? gmdate('Y-m-d');
-$marca  = $opts['marca']  ?? 'todas'; // solis|foxess|todas
+$opts   = $isCli ? (getopt('', ['inicio:', 'fim:', 'marca:']) ?: []) : [];
+$inicio = $opts['inicio'] ?? $_GET['inicio'] ?? gmdate('Y-m-d', time() - 30 * 86400);
+$fim    = $opts['fim']    ?? $_GET['fim']    ?? gmdate('Y-m-d');
+$marca  = $opts['marca']  ?? $_GET['marca']  ?? 'todas'; // solis|foxess|todas
 
 $pdo = getDbConnection();
 
