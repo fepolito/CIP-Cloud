@@ -351,3 +351,13 @@ CIP-DEC-20260615-003  Arquitetura: dashboard consome endpoint consolidado
 - **Decisão:** Corrigir `fill.opacity` para `[0.85, 0.85, 1, 1]` e `type: 'solid'` (linhas 100% nítidas e visíveis). Reativar marcadores com `size: [0, 0, 5, 5]` e borda `#070b14`. Traçado em reta `curve: 'straight'`, `width: [0, 0, 3, 3]`, Geração sólida e Consumo tracejado (`dashArray: [0, 0, 0, 6]`).
 - **Impacto:** energia.php v2.5 (função `buildChartOptions`).
 - **Status:** 🟢 Confirmada
+
+## CIP-DEC-20261012-002 (Patch 1) — Orquestrador único cron_run_all.php e unificação do cron cPanel
+- **Contexto:** Limitação de frequência do cron compartilhado da HostGator (janela mínima recomendada de 15 minutos).
+- **Decisão:** Criação de `api/sync/cron_run_all.php` executando sequencialmente `cron_solis.php` e `cron_foxess.php` sob `ob_start()` com log unificado em `storage/logs/cron_run_all.log`. Scripts individuais permanecem preservados para execução isolada e debug.
+- **Crontab cPanel:** `*/15 * * * * /usr/local/bin/ea-php83 /home1/aeoniu71/monitor.aeonium.com.br/api/sync/cron_run_all.php`.
+- **Impacto:** Redução da sobrecarga de invocação do cron, eliminação de concorrência ou suspensão no cPanel compartilhado, e observabilidade centralizada do ciclo de ingestão.
+- **Riscos:** Se uma ingestão falhar ou travar, a outra poderia ser impactada; mitigado por blocos `try/catch` independentes em cada script com isolamento de buffer.
+- **Owner:** Fernando
+- **Status:** 🟢 Confirmada
+
