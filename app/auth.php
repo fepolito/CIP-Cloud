@@ -20,6 +20,7 @@
 // HISTÓRICO (continuação):
 //   2026-05-15  v1.5.0  [ADD] authControlador() — HMAC-SHA256 para IoT
 //                        [ADD] authUsuario()     — sessão web para API
+//   2026-10-15  v1.6.0  [ADD] Fase C: carregamento de usuarios.paginas_permitidas na sessão
 // =============================================================
 
 
@@ -165,6 +166,15 @@ function loginUser(array $usuario): void
 
     $_SESSION['forcar_troca_senha'] = (int) ($usuario['forcar_troca_senha'] ?? 0);
 
+    // 🆕 Fase C: permissões de menu por página (NULL = acesso total, sem restrição)
+    $paginasRaw = $usuario['paginas_permitidas'] ?? null;
+    if ($paginasRaw !== null) {
+        $decoded = is_string($paginasRaw) ? json_decode($paginasRaw, true) : $paginasRaw;
+        $_SESSION['usuario_paginas_permitidas'] = is_array($decoded) ? $decoded : null;
+    } else {
+        $_SESSION['usuario_paginas_permitidas'] = null;
+    }
+
     // 🆕 Objeto consolidado para compatibilidade com novos controllers
     $_SESSION['usuario'] = [
         'id'                 => $_SESSION['usuario_id'],
@@ -174,6 +184,7 @@ function loginUser(array $usuario): void
         'papel_global'       => $_SESSION['papel_global'],
         'empresa_id'         => $_SESSION['empresa_id'],
         'forcar_troca_senha' => $_SESSION['forcar_troca_senha'],
+        'paginas_permitidas' => $_SESSION['usuario_paginas_permitidas'],
     ];
 
     $_SESSION['user_agent']         = $_SERVER['HTTP_USER_AGENT'] ?? '';

@@ -2,11 +2,11 @@
 declare(strict_types=1);
 /**
  * @arquivo       usuario_form.php
- * @versao        1.0.0
- * @modificado_em 2026-10-09
+ * @versao        1.1.0
+ * @modificado_em 2026-10-15
  * @objetivo      Formulário único de criação/edição de usuário, com gestão de vínculos
- *                em usuario_empresa, reset de senha (senha fixa 123456 + forcar_troca_senha)
- *                e regras de edição restrita para o próprio usuário.
+ *                em usuario_empresa, reset de senha (senha fixa 123456 + forcar_troca_senha),
+ *                regras de edição restrita para o próprio usuário e permissões de páginas (Fase C).
  * @autor         Fernando / CIP Cloud Copilot / ATGY
  */
 
@@ -57,6 +57,16 @@ $usuario = null;
 $vinculosAtuais = [];
 $erro = null;
 $pdo = getDbConnection();
+
+$paginasDisponiveis = [
+    'dashboard'   => 'Dashboard',
+    'energia'     => 'Energia',
+    'geracao'     => 'Geração',
+    'historico'   => 'Histórico',
+    'tarifas'     => 'Tarifas',
+    'faturamento' => 'Faturamento',
+    'limites'     => 'Limites',
+];
 
 if ($id) {
     $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE id = :id AND deleted_at IS NULL");
@@ -120,6 +130,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $senha         = (string) ($_POST['senha'] ?? '');
         $ativo         = isset($_POST['ativo']) ? 1 : 0;
 
+        $paginasPermitidasJson = null;
+        if ($perfil === 'usuario' && !empty($_POST['paginas_permitidas']) && is_array($_POST['paginas_permitidas'])) {
+            $paginasValidas = array_values(array_intersect(
+                $_POST['paginas_permitidas'],
+                array_keys($paginasDisponiveis)
+            ));
+            $paginasPermitidasJson = !empty($paginasValidas) ? json_encode($paginasValidas) : null;
+        }
+        // Perfis de gestão (master/master_operador/administrador/operador) sempre NULL (acesso total)
+
         // Regras de auto-edição restrita
         if ($editandoSelf && $id) {
             $nome          = (string) $usuario['nome'];
@@ -166,13 +186,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($id) {
             $sqlUpd = "UPDATE usuarios SET nome = :nome, email = :email, perfil = :perfil,
-                       empresa_id = :empresa_id, ativo = :ativo, atualizado_em = NOW()";
+                       empresa_id = :empresa_id, ativo = :ativo, paginas_permitidas = :paginas, atualizado_em = NOW()";
             $params = [
                 'nome'       => $nome,
                 'email'      => $email,
                 'perfil'     => $perfil,
                 'empresa_id' => $empresaGlobal ? null : $empresaIdForm,
                 'ativo'      => $ativo,
+                'paginas'    => $paginasPermitidasJson,
                 'id'         => $id,
             ];
 
@@ -196,8 +217,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $stmtIns = $pdo->prepare("
-                INSERT INTO usuarios (nome, email, senha_hash, perfil, empresa_id, ativo, criado_por, criado_em)
-                VALUES (:nome, :email, :hash, :perfil, :empresa_id, :ativo, :criado_por, NOW())
+                INSERT INTO usuarios (nome, email, senha_hash, perfil, empresa_id, ativo, paginas_permitidas, criado_por, criado_em)
+                VALUES (:nome, :email, :hash, :perfil, :empresa_id, :ativo, :paginas, :criado_por, NOW())
             ");
             $stmtIns->execute([
                 'nome'       => $nome,
@@ -206,6 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'perfil'     => $perfil,
                 'empresa_id' => $empresaGlobal ? null : $empresaIdForm,
                 'ativo'      => $ativo,
+                'paginas'    => $paginasPermitidasJson,
                 'criado_por' => $idLogado,
             ]);
             $id = (int) $pdo->lastInsertId();
@@ -265,6 +287,12 @@ if ($escopoGlobal) {
 }
 
 $empresaSelecionadaId = $usuario['empresa_id'] ?? $empresaPre;
+
+$paginasAtuais = [];
+if ($usuario && !empty($usuario['paginas_permitidas'])) {
+    $decoded = json_decode((string) $usuario['paginas_permitidas'], true);
+    $paginasAtuais = is_array($decoded) ? $decoded : [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR" data-tema="escuro">
@@ -620,6 +648,25 @@ $empresaSelecionadaId = $usuario['empresa_id'] ?? $empresaPre;
                     <button type="button" class="btn-add-vinculo" onclick="adicionarVinculo()">+ Adicionar Vínculo</button>
                 </div>
 
+                <div class="section-divider" id="blocoPaginasPermitidas" style="display:none;">
+                    <h2 class="section-title">Páginas Permitidas</h2>
+                    <p class="section-desc">
+                        Restringe o menu deste usuário apenas às páginas marcadas abaixo.
+                        Aplica-se somente ao perfil "Usuário" — demais perfis sempre têm acesso total.
+                    </p>
+                    <div style="display:flex;flex-wrap:wrap;gap:16px;">
+                        <?php foreach ($paginasDisponiveis as $pid => $plabel): ?>
+                            <label class="form-checkbox-label">
+                                <input type="checkbox"
+                                       name="paginas_permitidas[]"
+                                       value="<?php echo e($pid); ?>"
+                                       <?php echo in_array($pid, $paginasAtuais, true) ? 'checked' : ''; ?>>
+                                <?php echo e($plabel); ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
                 <div class="form-actions">
                     <div style="display:flex;gap:12px;align-items:center;">
                         <button type="submit" class="btn-salvar">Gravar Alterações</button>
@@ -671,6 +718,7 @@ $empresaSelecionadaId = $usuario['empresa_id'] ?? $empresaPre;
         const perfilSelect = document.getElementById('perfil');
         const empresaSelect = document.getElementById('empresa_id');
         const labelEmpresa = document.getElementById('labelEmpresa');
+        const blocoPaginas = document.getElementById('blocoPaginasPermitidas');
         if (!perfilSelect || !empresaSelect || !labelEmpresa) return;
 
         const val = perfilSelect.value;
@@ -680,6 +728,10 @@ $empresaSelecionadaId = $usuario['empresa_id'] ?? $empresaPre;
             labelEmpresa.classList.remove('required');
         } else {
             labelEmpresa.classList.add('required');
+        }
+
+        if (blocoPaginas) {
+            blocoPaginas.style.display = (val === 'usuario') ? '' : 'none';
         }
     }
 

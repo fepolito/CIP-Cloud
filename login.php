@@ -71,7 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     papel_global,
                     empresa_id,
                     ativo,
-                    forcar_troca_senha
+                    forcar_troca_senha,
+                    paginas_permitidas
                 FROM usuarios
                 WHERE email = :email
                   AND deleted_at IS NULL
@@ -102,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ? (int) $usuario['empresa_id']
                             : null,
                         'forcar_troca_senha' => (int)    ($usuario['forcar_troca_senha'] ?? 0),
+                        'paginas_permitidas' => $usuario['paginas_permitidas'] ?? null,
                     ]);
 
                     header('Location: ' . asset('/dashboard.php')); // ← era appUrl()

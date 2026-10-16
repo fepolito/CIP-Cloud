@@ -136,7 +136,7 @@ $params = [];
 Tenant::aplicarParam($params);
 
 $stmt = $pdo->prepare($sqlCtrls);
-$stmt->execute();
+$stmt->execute($params);
 $controladoresAcessiveis = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $ctrlSolicitado = filter_input(INPUT_GET, 'ctrl', FILTER_VALIDATE_INT) ?: null;

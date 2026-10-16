@@ -30,6 +30,8 @@
  *                        Ajuste do seletor p/ mobile.
  *   2026-07-18  vB1.2.0  Patch CIP-DEC-20260718-002: Status derivado da
  *                        telemetria (MAX timestamp) ao invés do ping.
+ *   2026-10-15  v2.4.0   Patch Fase C: filtro de paginas_permitidas (JSON)
+ *                        no menu hambúrguer para perfil usuario.
  * ============================================================
  */
 
@@ -89,6 +91,20 @@ $_menuItems = [
     ['href' => 'limites.php', 'icon' => '🔧', 'label' => 'Limites',   'id' => 'limites'],
 ];
 
+$_perfilHeader = $_SESSION['usuario_perfil'] ?? '';
+$_perfisComAcessoTotal = ['master', 'master_operador', 'administrador', 'operador'];
+
+$_paginasPermitidas = $_SESSION['usuario_paginas_permitidas'] ?? null;
+// Espera-se que o login (auth.php) já tenha decodificado o JSON
+// e colocado o array (ou null) na sessão em 'usuario_paginas_permitidas'.
+
+if (!in_array($_perfilHeader, $_perfisComAcessoTotal, true) && is_array($_paginasPermitidas)) {
+    $_menuItems = array_values(array_filter(
+        $_menuItems,
+        static fn(array $item): bool => in_array($item['id'], $_paginasPermitidas, true)
+    ));
+}
+
 // ── Itens do menu engrenagem ─────────────────────────────────
 $_ehMasterHeader = in_array($_SESSION['usuario_perfil'] ?? '', ['master', 'master_operador'], true);
 $_ehAdminHeader  = in_array($_SESSION['usuario_perfil'] ?? '', ['master', 'master_operador', 'administrador'], true);
@@ -143,7 +159,7 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
         $params = [];
         \App\Helpers\Tenant::aplicarParam($params);
         $stmt = $pdo->prepare($sqlCtrls);
-        $stmt->execute();
+        $stmt->execute($params);
         $controladoresAcessiveis = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 

@@ -95,7 +95,7 @@ $params = [];
 Tenant::aplicarParam($params);
 
 $stmt = $pdo->prepare($sqlCtrls);
-$stmt->execute();
+$stmt->execute($params);
 $controladoresAcessiveis = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 🎯 Define o controlador "ativo" da página:
