@@ -1,9 +1,10 @@
 <?php
 /**
  * @arquivo       app/services/Solis/SolisIngestor.php
- * @versao        1.5.0
- * @modificado_em 2026-10-12
+ * @versao        1.6.0
+ * @modificado_em 2026-10-17
  * @objetivo      Coleta inverterList (paginado) para descoberta/upsert de inversores,
+ *                auto-cadastra estacoes orfas (station_id desconhecida),
  *                depois busca inverterDay por inversor para capturar a janela dos
  *                ultimos 15min (3 buckets de 5min), compensando o limite de cron de
  *                15min do hosting compartilhado. Grava telemetria segregada
@@ -123,6 +124,9 @@ final class SolisIngestor
             }
             $page++;
         } while ($page <= $pages);
+
+        // Auto-cadastra estações novas órfãs (inversores com controlador_id = NULL)
+        $stats['estacoes_novas'] = $this->descobrirEAutoCadastrarEstacoes();
 
         // Consolida cada bucket da janela sequencialmente (ordem cronologica
         // importa para o calculo correto do delta de energia).
@@ -327,6 +331,143 @@ final class SolisIngestor
     }
 
     /**
+     * Detecta inversores gravados sem controlador_id (station_id desconhecido
+     * no momento do upsert) e cria automaticamente o controlador + vinculo,
+     * permitindo que a estacao nova entre em producao sem intervencao manual.
+     * Loga cada auto-cadastro em logs_sistema para revisao humana posterior
+     * (nome/apelido pode precisar de ajuste fino).
+     *
+     * @return int Quantidade de estacoes novas auto-cadastradas neste ciclo.
+     */
+    private function descobrirEAutoCadastrarEstacoes(): int
+    {
+        $sql = "
+            SELECT DISTINCT i.station_id, i.station_name, i.empresa_id
+              FROM inversores i
+             WHERE i.controlador_id IS NULL
+               AND i.station_id IS NOT NULL
+               AND i.station_id != ''
+        ";
+        $stmt = $this->pdo->query($sql);
+        $orfas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($orfas)) {
+            return 0;
+        }
+
+        $qtd = 0;
+        foreach ($orfas as $o) {
+            $stationId   = (string) $o['station_id'];
+            $stationName = (string) ($o['station_name'] ?: $stationId);
+            $empresaId   = (int) $o['empresa_id'];
+
+            try {
+                $this->pdo->beginTransaction();
+
+                // Gera codigo sequencial SOLIS-VIR-NNNN
+                $codigo = $this->proximoCodigoSolis();
+
+                $insCtrl = $this->pdo->prepare("
+                    INSERT INTO controladores
+                        (codigo, apelido, tipo, empresa_id, status,
+                         solis_station_id, created_at, updated_at)
+                    VALUES
+                        (:cod, :apelido, 'SOLIS-CLOUD', :emp, 'ativo',
+                         :sid, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+                ");
+                $insCtrl->execute([
+                    ':cod'     => $codigo,
+                    ':apelido' => 'Solis - ' . $stationName,
+                    ':emp'     => $empresaId,
+                    ':sid'     => $stationId,
+                ]);
+                $novoCtrlId = (int) $this->pdo->lastInsertId();
+
+                // Vincula todos os inversores dessa station_id ao novo controlador
+                $updInv = $this->pdo->prepare("
+                    UPDATE inversores
+                       SET controlador_id = :ctrl
+                     WHERE station_id = :sid AND controlador_id IS NULL
+                ");
+                $updInv->execute([':ctrl' => $novoCtrlId, ':sid' => $stationId]);
+
+                // Cria vinculo em controlador_inversores para cada inversor da estacao
+                $selInv = $this->pdo->prepare("
+                    SELECT id, solis_sn FROM inversores WHERE station_id = :sid
+                ");
+                $selInv->execute([':sid' => $stationId]);
+                $invsDaEstacao = $selInv->fetchAll(PDO::FETCH_ASSOC);
+
+                $insVinculo = $this->pdo->prepare("
+                    INSERT INTO controlador_inversores
+                        (controlador_id, inversor_sn, marca, tipo_equipamento,
+                         status, inversor_ref_id, criado_em)
+                    VALUES
+                        (:ctrl, :sn, 'SOLIS', 'inversor', 'ativo', :ref, UTC_TIMESTAMP())
+                    ON DUPLICATE KEY UPDATE
+                        controlador_id = VALUES(controlador_id),
+                        status = 'ativo'
+                ");
+                foreach ($invsDaEstacao as $inv) {
+                    $insVinculo->execute([
+                        ':ctrl' => $novoCtrlId,
+                        ':sn'   => $inv['solis_sn'],
+                        ':ref'  => $inv['id'],
+                    ]);
+                }
+
+                $this->pdo->commit();
+
+                $this->logAutoCadastro($novoCtrlId, $codigo, $stationName, $stationId, count($invsDaEstacao));
+                $qtd++;
+            } catch (Throwable $e) {
+                if ($this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                @error_log('[solis_ingestor][autodiscovery] Falha ao auto-cadastrar station_id=' . $stationId . ': ' . $e->getMessage());
+            }
+        }
+
+        if ($qtd > 0) {
+            $this->stationMap = null; // limpa cache de mapa para recarregar
+        }
+
+        return $qtd;
+    }
+
+    /** Gera o proximo codigo sequencial no padrao SOLIS-VIR-NNNN. */
+    private function proximoCodigoSolis(): string
+    {
+        $stmt = $this->pdo->query("
+            SELECT codigo FROM controladores
+             WHERE codigo LIKE 'SOLIS-VIR-%'
+             ORDER BY CAST(SUBSTRING(codigo, 11) AS UNSIGNED) DESC
+             LIMIT 1
+        ");
+        $ultimo = $stmt->fetchColumn();
+        $num = $ultimo ? ((int) substr((string) $ultimo, 10) + 1) : 1;
+        return sprintf('SOLIS-VIR-%04d', $num);
+    }
+
+    /** Loga o auto-cadastro em logs_sistema para revisao humana (nome/apelido). */
+    private function logAutoCadastro(int $ctrlId, string $codigo, string $stationName, string $stationId, int $qtdInversores): void
+    {
+        try {
+            $msg = sprintf(
+                'Nova estacao Solis auto-cadastrada: controlador_id=%d codigo=%s nome="%s" station_id=%s (%d inversor(es)). REVISAR apelido/empresa_id manualmente.',
+                $ctrlId, $codigo, $stationName, $stationId, $qtdInversores
+            );
+            $stmt = $this->pdo->prepare("
+                INSERT INTO logs_sistema (controlador_id, nivel, origem, mensagem, criado_em)
+                VALUES (:ctrl, 'WARNING', 'solis_ingestor_autodiscovery', :msg, UTC_TIMESTAMP())
+            ");
+            $stmt->execute([':ctrl' => $ctrlId, ':msg' => $msg]);
+        } catch (Throwable) {
+            // nao deixa falha de log quebrar o ciclo
+        }
+    }
+
+    /**
      * INSERT-if-null: so grava se o bucket ainda nao foi ocupado.
      * Campos renomeados em relacao a inverterList: pac/eToday/eTotal/state
      * (inverterDay) em vez de pac1/etoday1/etotal1/state (inverterList).
@@ -409,6 +550,9 @@ final class SolisIngestor
 
             $pageNo++;
         } while ($pageNo <= $pages);
+
+        // Auto-cadastra quaisquer estações órfãs descobertas
+        $this->descobrirEAutoCadastrarEstacoes();
 
         return $resultado;
     }

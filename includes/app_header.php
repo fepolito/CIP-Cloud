@@ -32,6 +32,8 @@
  *                        telemetria (MAX timestamp) ao invés do ping.
  *   2026-10-15  v2.4.0   Patch Fase C: filtro de paginas_permitidas (JSON)
  *                        no menu hambúrguer para perfil usuario.
+ *   2026-10-17  v2.5.0   Patch Bugfix Logo Tenant (fallback integradora) e
+ *                        Limpeza de Pill do Controlador no cabeçalho.
  * ============================================================
  */
 
@@ -45,6 +47,19 @@ if (!function_exists('e')) {
         return htmlspecialchars((string) $valor, ENT_QUOTES, 'UTF-8');
     }
 }
+if (!function_exists('limparNomeControlador')) {
+    function limparNomeControlador(?string $apelido, string $codigo = ''): string {
+        $nome = trim((string) $apelido);
+        if ($nome === '') {
+            return $codigo;
+        }
+        // Remove eventual prefixo de código duplicado "CODIGO — "
+        $limpo = preg_replace('/^(?:[A-Z0-9_-]+\s*[\-\x{2013}\x{2014}]\s*)/iu', '', $nome);
+        // Remove prefixos de marca "Solis - ", "Fox ESS - ", "AES - ", etc.
+        $limpo = preg_replace('/^(?:Solis|Fox\s*ESS|AES)\s*[\-\x{2013}\x{2014}]\s*/iu', '', $limpo);
+        return trim($limpo) !== '' ? trim($limpo) : $nome;
+    }
+}
 
 // ── Logo da empresa ──────────────────────────────────────────
 $_headerLogoPath = '';
@@ -53,12 +68,33 @@ $_headerEmpNome  = '';
 try {
     // $pdo é injetado pela página pai (dashboard, energia, etc.)
     if (isset($pdo)) {
-        $stmtEmp = $pdo->query(
-            'SELECT nome_fantasia, logo_path FROM empresa ORDER BY id DESC LIMIT 1'
-        );
-        $rowEmp = $stmtEmp->fetch(PDO::FETCH_ASSOC);
-        if ($rowEmp) {
-            $_headerLogoPath = $rowEmp['logo_path']    ?? '';
+        $empresaUsuarioId = $_SESSION['empresa_id'] ?? null;
+        $rowEmp = null;
+
+        // 1) Se o usuário pertence a uma empresa específica, busca ela
+        if (!empty($empresaUsuarioId)) {
+            $stmtEmp = $pdo->prepare(
+                'SELECT nome_fantasia, logo_path FROM empresa WHERE id = :id AND deleted_at IS NULL LIMIT 1'
+            );
+            $stmtEmp->execute([':id' => (int) $empresaUsuarioId]);
+            $rowEmp = $stmtEmp->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+
+        // 2) Fallback para a integradora raiz se o usuário é global ou se a empresa não possui logo próprio
+        $logoValido = !empty($rowEmp['logo_path']) && (file_exists($rowEmp['logo_path']) || file_exists(dirname(__DIR__) . '/' . ltrim($rowEmp['logo_path'], '/')));
+
+        if (!$rowEmp || !$logoValido) {
+            $stmtInteg = $pdo->query(
+                'SELECT nome_fantasia, logo_path FROM empresa WHERE is_integradora = 1 AND ativo = 1 ORDER BY id ASC LIMIT 1'
+            );
+            $rowInteg = $stmtInteg->fetch(PDO::FETCH_ASSOC) ?: null;
+
+            if ($rowInteg) {
+                $_headerLogoPath = $rowInteg['logo_path'] ?? '';
+                $_headerEmpNome  = $rowEmp['nome_fantasia'] ?? ($rowInteg['nome_fantasia'] ?? '');
+            }
+        } else {
+            $_headerLogoPath = $rowEmp['logo_path'] ?? '';
             $_headerEmpNome  = $rowEmp['nome_fantasia'] ?? '';
         }
     }
@@ -224,8 +260,8 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
                         <optgroup label="<?php echo e($nomeEmpresa); ?>">
                             <?php foreach ($controladoresDoGrupo as $c): ?>
                                 <option value="<?php echo $c['id']; ?>" <?php echo $c['id'] == $controladorAtivo['id'] ? 'selected' : ''; ?>
-                                        title="<?php echo e($c['codigo'] . ($c['apelido'] ? ' — ' . $c['apelido'] : '')); ?>">
-                                    <?php echo e($c['apelido'] ?: $c['codigo']); ?>
+                                        title="<?php echo e($c['codigo'] . ' — ' . limparNomeControlador($c['apelido'], $c['codigo'])); ?>">
+                                    <?php echo e(limparNomeControlador($c['apelido'], $c['codigo'])); ?>
                                 </option>
                             <?php endforeach; ?>
                         </optgroup>
@@ -242,7 +278,7 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
             <?php else: ?>
                 <div style="background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e2e8f0); color: var(--color-text, #0f172a); padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
                     <span>📡</span>
-                    <?php echo e($controladorAtivo['codigo'] . ($controladorAtivo['apelido'] ? ' — ' . $controladorAtivo['apelido'] : '')); ?>
+                    <?php echo e(limparNomeControlador($controladorAtivo['apelido'], $controladorAtivo['codigo'])); ?>
                 </div>
             <?php endif; ?>
         </div>
@@ -250,7 +286,10 @@ $_configItems[] = ['href' => 'logout.php', 'icon' => '🚪', 'label' => 'Sair', 
 
     <!-- Logo ou iniciais -->
     <div class="brand-avatar" title="<?php echo e($_headerEmpNome); ?>">
-        <?php if (!empty($_headerLogoPath) && file_exists($_headerLogoPath)): ?>
+        <?php 
+        $temLogoFisico = !empty($_headerLogoPath) && (file_exists($_headerLogoPath) || file_exists(dirname(__DIR__) . '/' . ltrim($_headerLogoPath, '/')));
+        if ($temLogoFisico): 
+        ?>
             <img src="<?php echo e(appUrl('/' . $_headerLogoPath)); ?>"
                  alt="Logo" class="brand-logo">
         <?php else: ?>

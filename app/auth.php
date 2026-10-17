@@ -19,8 +19,8 @@
  // =============================================================
 // HISTÓRICO (continuação):
 //   2026-05-15  v1.5.0  [ADD] authControlador() — HMAC-SHA256 para IoT
-//                        [ADD] authUsuario()     — sessão web para API
 //   2026-10-15  v1.6.0  [ADD] Fase C: carregamento de usuarios.paginas_permitidas na sessão
+//   2026-10-17  v1.6.1  [FIX] Validação e consolidação de paginas_permitidas em $_SESSION['usuario']
 // =============================================================
 
 
