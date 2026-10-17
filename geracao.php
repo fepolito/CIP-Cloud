@@ -2,12 +2,13 @@
 declare(strict_types=1);
 /**
  * @arquivo       geracao.php
- * @versao        2.1.0
- * @modificado_em 2026-10-16
+ * @versao        2.1.1
+ * @modificado_em 2026-10-17
  * @objetivo      Página de Geração para monitoramento de energia solar (tons de laranja).
  *                Abas Dia (linha 24h, zoom, bandeira e navegação RW/FF), Mês (barras com 30 dias na base),
  *                Ano (barras com 12 meses na base), Total (barras com últimos 5 anos).
  *                Consome os endpoints api/geracao/{dia,mes,ano,total}.php.
+ *                v2.1.1: Inclusão padrão de includes/app_head.php (favicon, anti-FOUC, app-shell, tema).
  * @autor         Fernando / CIP Cloud Copilot
  */
 
@@ -66,13 +67,9 @@ $appPaginaAtual     = 'geracao';
 $appIsAdmin         = (bool) ($_SESSION['usuario_admin'] ?? false);
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-tema="escuro">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geração - CIP Cloud</title>
-    <link rel="stylesheet" href="/assets/css/app.css">
-    <link rel="stylesheet" href="/assets/css/header.css">
+    <?php require __DIR__ . '/includes/app_head.php'; ?>
     <!-- Chart.js 4 + Plugin Zoom -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
