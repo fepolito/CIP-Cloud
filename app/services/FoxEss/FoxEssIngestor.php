@@ -1,9 +1,11 @@
 <?php
 /**
  * @arquivo       app/services/FoxEss/FoxEssIngestor.php
- * @versao        3.2.0
- * @modificado_em 2026-10-12
- * @objetivo      Coleta telemetria da API FoxESS via historyQuery (janela de 15min,
+ * @versao        3.3.0
+ * @modificado_em 2026-10-17
+ * @objetivo      Auto-descobre estacoes e inversores via deviceList() (criando controladores
+ *                virtuais FOX-VIR-NNNN e vinculos em controlador_inversores), depois
+ *                coleta telemetria da API FoxESS via historyQuery (janela de 15min,
  *                3 buckets de 5min) com retry no bucket recente e calculo dinamico
  *                de qualidade_dado. Inclui metodos publicos de backfill historico
  *                por dia fixo (24h por chamada, variaveis otimizadas).
@@ -36,6 +38,9 @@ final class FoxEssIngestor
 
     public function run(): array
     {
+        // 🆕 Auto-discovery de estações/equipamentos via deviceList() antes de buscar grupos
+        $estacoesNovas = $this->descobrirEAutoCadastrarDispositivosFox();
+
         $buckets = $this->janelaBuckets();
         $grupos  = $this->buscarControladoresFox();
 
@@ -57,10 +62,11 @@ final class FoxEssIngestor
         }
 
         return [
-            'buckets_utc'  => $buckets,
-            'processados'  => $processados,
-            'erros'        => $erros,
-            'detalhes'     => $detalhes,
+            'estacoes_novas' => $estacoesNovas,
+            'buckets_utc'    => $buckets,
+            'processados'    => $processados,
+            'erros'          => $erros,
+            'detalhes'       => $detalhes,
         ];
     }
 
@@ -778,6 +784,228 @@ final class FoxEssIngestor
                 'isexp' => $isExporting ? 1 : 0, 'inj' => $l['soma_exp'],
                 'etot' => $l['soma_total'], 'qual' => $qualidade,
             ]);
+        }
+    }
+
+    /**
+     * Auto-descobre estações e dispositivos via deviceList() da FoxESS Open API.
+     * Cria novos controladores virtuais (FOX-VIR-NNNN) para estações ainda não cadastradas
+     * e vincula os respectivos inversores em controlador_inversores. Se a estação
+     * já existir, apenas garante que os inversores novos estejam vinculados.
+     *
+     * @param array<int, array<string, mixed>>|null $dispositivosMock Dados injetados para testes unitários/mocks
+     * @return int Quantidade de novas estações auto-cadastradas neste ciclo.
+     */
+    public function descobrirEAutoCadastrarDispositivosFox(?array $dispositivosMock = null): int
+    {
+        try {
+            $todosDispositivos = $dispositivosMock !== null 
+                ? $dispositivosMock 
+                : $this->obterTodosDispositivosFox();
+        } catch (Throwable $e) {
+            @error_log('[fox_ess_ingestor][autodiscovery] Falha ao consultar deviceList: ' . $e->getMessage());
+            return 0;
+        }
+
+        if (empty($todosDispositivos)) {
+            return 0;
+        }
+
+        // Agrupa dispositivos por stationID
+        $estacoes = [];
+        foreach ($todosDispositivos as $disp) {
+            $stationId = trim((string)($disp['stationID'] ?? ''));
+            if ($stationId === '') {
+                continue;
+            }
+            $deviceSn = trim((string)($disp['deviceSN'] ?? ''));
+            if ($deviceSn === '') {
+                continue;
+            }
+            $stationName = trim((string)($disp['stationName'] ?? ''));
+            if (!isset($estacoes[$stationId])) {
+                $estacoes[$stationId] = [
+                    'station_name' => $stationName ?: $stationId,
+                    'dispositivos' => [],
+                ];
+            }
+            $estacoes[$stationId]['dispositivos'][] = $disp;
+        }
+
+        $novasEstacoes = 0;
+
+        foreach ($estacoes as $stationId => $estacao) {
+            $stationName  = $estacao['station_name'];
+            $dispositivos = $estacao['dispositivos'];
+
+            try {
+                $this->pdo->beginTransaction();
+
+                // 1) Busca controlador existente por fox_station_id
+                $stmtCtrl = $this->pdo->prepare("
+                    SELECT id, codigo, apelido
+                      FROM controladores
+                     WHERE fox_station_id = :sid
+                     LIMIT 1
+                ");
+                $stmtCtrl->execute([':sid' => $stationId]);
+                $ctrl = $stmtCtrl->fetch(PDO::FETCH_ASSOC);
+
+                // 2) Fallback: se não achou por fox_station_id, verifica se algum SN já está em controlador_inversores
+                if (!$ctrl && !empty($dispositivos)) {
+                    $sns = array_map(static fn($d): string => trim((string)$d['deviceSN']), $dispositivos);
+                    $placeholders = implode(',', array_fill(0, count($sns), '?'));
+                    $stmtSn = $this->pdo->prepare("
+                        SELECT c.id, c.codigo, c.apelido
+                          FROM controladores c
+                          JOIN controlador_inversores ci ON ci.controlador_id = c.id
+                         WHERE ci.inversor_sn IN ($placeholders)
+                         LIMIT 1
+                    ");
+                    $stmtSn->execute($sns);
+                    $ctrl = $stmtSn->fetch(PDO::FETCH_ASSOC);
+
+                    if ($ctrl) {
+                        // Amarração retroativa de fox_station_id
+                        $upd = $this->pdo->prepare("
+                            UPDATE controladores
+                               SET fox_station_id = :sid
+                             WHERE id = :cid AND (fox_station_id IS NULL OR fox_station_id = '')
+                        ");
+                        $upd->execute([':sid' => $stationId, ':cid' => $ctrl['id']]);
+                    }
+                }
+
+                $ehNovoControlador = false;
+
+                // 3) Se a estação realmente não existe, cria novo controlador FOX-VIR-NNNN
+                if (!$ctrl) {
+                    $codigo   = $this->proximoCodigoFox();
+                    $token    = hash('sha256', $codigo . '-autodiscovery-' . bin2hex(random_bytes(8)));
+                    $apelido  = 'Fox ESS - ' . $stationName;
+
+                    $insCtrl = $this->pdo->prepare("
+                        INSERT INTO controladores
+                            (codigo, apelido, tipo, empresa_id, status,
+                             solis_station_id, fox_station_id, token_api_hash, created_at, updated_at)
+                        VALUES
+                            (:cod, :apelido, 'FOX-ESS-CLOUD', NULL, 'ativo',
+                             NULL, :sid, :token, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+                    ");
+                    $insCtrl->execute([
+                        ':cod'     => $codigo,
+                        ':apelido' => $apelido,
+                        ':sid'     => $stationId,
+                        ':token'   => $token,
+                    ]);
+                    $ctrlId = (int)$this->pdo->lastInsertId();
+                    $ctrlCodigo = $codigo;
+                    $ehNovoControlador = true;
+                } else {
+                    $ctrlId = (int)$ctrl['id'];
+                    $ctrlCodigo = (string)$ctrl['codigo'];
+                }
+
+                // 4) Garante que todos os inversores (deviceSN) da estação estejam vinculados em controlador_inversores
+                $insVinculo = $this->pdo->prepare("
+                    INSERT INTO controlador_inversores
+                        (controlador_id, inversor_sn, marca, tipo_equipamento, status, criado_em)
+                    VALUES
+                        (:ctrl, :sn, 'FOX-ESS', 'inversor', 'ativo', UTC_TIMESTAMP())
+                    ON DUPLICATE KEY UPDATE
+                        controlador_id = VALUES(controlador_id),
+                        status = 'ativo'
+                ");
+
+                foreach ($dispositivos as $disp) {
+                    $sn = trim((string)$disp['deviceSN']);
+                    if ($sn === '') {
+                        continue;
+                    }
+                    $insVinculo->execute([
+                        ':ctrl' => $ctrlId,
+                        ':sn'   => $sn,
+                    ]);
+                }
+
+                $this->pdo->commit();
+
+                if ($ehNovoControlador) {
+                    $this->logAutoCadastro($ctrlId, $ctrlCodigo, $stationName, $stationId, count($dispositivos));
+                    $novasEstacoes++;
+                }
+
+            } catch (Throwable $e) {
+                if ($this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                @error_log('[fox_ess_ingestor][autodiscovery] Falha ao auto-cadastrar station_id=' . $stationId . ': ' . $e->getMessage());
+            }
+        }
+
+        return $novasEstacoes;
+    }
+
+    /**
+     * Busca todos os dispositivos paginados via deviceList().
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function obterTodosDispositivosFox(): array
+    {
+        $page = 1;
+        $pageSize = 50;
+        $todos = [];
+
+        do {
+            $resp = $this->client->deviceList($page, $pageSize);
+            $result = $resp['result'] ?? [];
+            $itens = $result['data'] ?? [];
+
+            if (!is_array($itens) || empty($itens)) {
+                break;
+            }
+
+            foreach ($itens as $item) {
+                $todos[] = $item;
+            }
+
+            $total = (int)($result['total'] ?? 0);
+            $page++;
+        } while (count($todos) < $total && $total > 0);
+
+        return $todos;
+    }
+
+    /** Gera o proximo codigo sequencial no padrao FOX-VIR-NNNN. */
+    private function proximoCodigoFox(): string
+    {
+        $stmt = $this->pdo->query("
+            SELECT codigo FROM controladores
+             WHERE codigo LIKE 'FOX-VIR-%'
+             ORDER BY CAST(SUBSTRING(codigo, 9) AS UNSIGNED) DESC
+             LIMIT 1
+        ");
+        $ultimo = $stmt->fetchColumn();
+        $num = $ultimo ? ((int) substr((string) $ultimo, 8) + 1) : 1;
+        return sprintf('FOX-VIR-%04d', $num);
+    }
+
+    /** Loga o auto-cadastro em logs_sistema para revisao humana (nome/apelido). */
+    private function logAutoCadastro(int $ctrlId, string $codigo, string $stationName, string $stationId, int $qtdDispositivos): void
+    {
+        try {
+            $msg = sprintf(
+                'Nova estacao FoxESS auto-cadastrada: controlador_id=%d codigo=%s nome="%s" station_id=%s (%d dispositivo(s)). REVISAR apelido/empresa_id manualmente.',
+                $ctrlId, $codigo, $stationName, $stationId, $qtdDispositivos
+            );
+            $stmt = $this->pdo->prepare("
+                INSERT INTO logs_sistema (controlador_id, nivel, origem, mensagem, criado_em)
+                VALUES (:ctrl, 'WARN', 'fox_ess_ingestor_autodiscovery', :msg, UTC_TIMESTAMP())
+            ");
+            $stmt->execute([':ctrl' => $ctrlId, ':msg' => $msg]);
+        } catch (Throwable) {
+            // nao deixa falha de log quebrar o ciclo
         }
     }
 }
