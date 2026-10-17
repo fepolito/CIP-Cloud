@@ -1,7 +1,7 @@
 <?php
 /**
  * @arquivo       app/services/Solis/SolisIngestor.php
- * @versao        1.6.0
+ * @versao        1.6.1
  * @modificado_em 2026-10-17
  * @objetivo      Coleta inverterList (paginado) para descoberta/upsert de inversores,
  *                auto-cadastra estacoes orfas (station_id desconhecida),
@@ -370,16 +370,16 @@ final class SolisIngestor
                 $insCtrl = $this->pdo->prepare("
                     INSERT INTO controladores
                         (codigo, apelido, tipo, empresa_id, status,
-                         solis_station_id, created_at, updated_at)
+                         solis_station_id, token_api_hash, created_at, updated_at)
                     VALUES
-                        (:cod, :apelido, 'SOLIS-CLOUD', :emp, 'ativo',
-                         :sid, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+                        (:cod, :apelido, 'SOLIS-CLOUD', NULL, 'ativo',
+                         :sid, :token, UTC_TIMESTAMP(), UTC_TIMESTAMP())
                 ");
                 $insCtrl->execute([
                     ':cod'     => $codigo,
                     ':apelido' => 'Solis - ' . $stationName,
-                    ':emp'     => $empresaId,
                     ':sid'     => $stationId,
+                    ':token'   => hash('sha256', $codigo . '-autodiscovery-' . bin2hex(random_bytes(8))),
                 ]);
                 $novoCtrlId = (int) $this->pdo->lastInsertId();
 
@@ -459,7 +459,7 @@ final class SolisIngestor
             );
             $stmt = $this->pdo->prepare("
                 INSERT INTO logs_sistema (controlador_id, nivel, origem, mensagem, criado_em)
-                VALUES (:ctrl, 'WARNING', 'solis_ingestor_autodiscovery', :msg, UTC_TIMESTAMP())
+                VALUES (:ctrl, 'WARN', 'solis_ingestor_autodiscovery', :msg, UTC_TIMESTAMP())
             ");
             $stmt->execute([':ctrl' => $ctrlId, ':msg' => $msg]);
         } catch (Throwable) {
